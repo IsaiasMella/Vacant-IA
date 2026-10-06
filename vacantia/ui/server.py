@@ -745,6 +745,13 @@ class Handler(BaseHTTPRequestHandler):
         claves = {c for c, _, _ in data.MOTIVOS}
         motivo_clave = form.get("motivo_clave", "").strip()
         motivo_clave = motivo_clave if motivo_clave in claves else ""
+        # "Apliqué" con un motivo escrito es un Enter en el campo del motivo: el
+        # navegador manda el formulario con el primer botón, que es "Apliqué".
+        # Pasó el 24/9/2026 con "semi senior no acepto", que quedó como
+        # aplicada y le enseñó al scoring justo lo contrario. Nadie escribe por
+        # qué NO aplicó y después aprieta "Apliqué".
+        if aplicado and motivo:
+            aplicado = False
 
         # Alcanza con cualquiera de los dos: un motivo del desplegable, o texto
         # libre. El campo de texto está siempre a la vista y es opcional.

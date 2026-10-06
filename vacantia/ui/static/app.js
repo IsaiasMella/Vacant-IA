@@ -123,6 +123,18 @@ document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('form.acciones').forEach(function (form) {
     form.addEventListener('submit', recordarScroll);
   });
+  // Enter en el campo del motivo descarta. Sin esto el navegador manda el
+  // formulario con el PRIMER botón, que es "Apliqué": el 24/9/2026 "semi
+  // senior no acepto" quedó guardada como aplicada, y el sistema aprendió al
+  // revés. El servidor también lo ataja (`_post_feedback`).
+  document.querySelectorAll('.motivo input[name=motivo]').forEach(function (campo) {
+    campo.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter') { return; }
+      ev.preventDefault();
+      var boton = campo.closest('.motivo').querySelector('button[value=no]');
+      if (boton) { boton.click(); }
+    });
+  });
   document.querySelectorAll('form.armador').forEach(function (form) {
     form.addEventListener('submit', recordarTaller);
   });

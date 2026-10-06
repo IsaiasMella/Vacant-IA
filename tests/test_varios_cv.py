@@ -185,8 +185,12 @@ def test_con_un_cv_el_prompt_es_byte_a_byte_el_de_siempre(monkeypatch):
 
     esperado = scoring.SCORE_PROMPT.format(
         candidate_profile=scoring.build_candidate_profile(PERFIL_SCORING),
-        resume_summary="MI CV", jobs_text=scoring._jobs_text(jobs), min_score=60)
+        resume_summary="MI CV", past_decisions="",
+        jobs_text=scoring._jobs_text(jobs), min_score=60)
     assert capturas[-1] == esperado
+    # Sin descartes marcados no queda rastro del bloque de aprendizaje.
+    assert "PAST DECISIONS" not in capturas[-1]
+    assert "\n\n\n" not in capturas[-1]
     assert jobs[0].cv_recomendado == ""
 
 

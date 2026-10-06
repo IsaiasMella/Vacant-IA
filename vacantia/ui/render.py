@@ -663,7 +663,9 @@ def _tarjeta_filtrada(oferta: dict, perfil: str, desde: str, pagina: int,
         f'{f"""<span class="detalle">{esc(explica)}</span>""" if explica else ""}</p>'
         for clave, explica in motivos
     )
-    y_ademas = ('<p class="ayuda">Cae por los dos: alcanza con que uno esté bien '
+    # Desde el 17/9/2026 hay cuatro filtros, así que pueden ser más de dos.
+    cuantos = "los dos" if len(motivos) == 2 else f"los {len(motivos)}"
+    y_ademas = (f'<p class="ayuda">Cae por {cuantos}: alcanza con que uno esté bien '
                 'para que no tenga que llegarte.</p>' if len(motivos) > 1 else "")
     return f"""<article class="oferta filtrada">
 {cabecera}
@@ -691,8 +693,15 @@ def _tarjeta(oferta: dict, perfil: str, ver: str, desde: str = "todo",
     Es el componente central de la app y el que más disciplina necesita. Por
     defecto se ven **dos controles y nada más**: "Apliqué" en primario y "No
     apliqué" en secundario. El bloque de motivo se despliega adentro de la misma
-    tarjeta recién cuando se marca "No apliqué"; "Ya no está" y los links
-    auxiliares viven en el menú de tres puntos de la esquina.
+    tarjeta recién cuando se marca "No apliqué"; los links auxiliares viven en
+    el menú de tres puntos de la esquina.
+
+    **"Archivar" está a la vista, en fantasma.** Es "no le doy bola a esta
+    oferta", por la razón que sea: muy vieja, no era una oferta, o cualquier
+    otra que no vale la pena explicar. Vivió en ese menú como "Ya no está", que
+    lo achicaba a los avisos vencidos, y en la práctica desapareció. Isaías lo
+    pidió a la vista el 25/9/2026. Es el único tercer control permitido, y en
+    fantasma para no competir con los otros dos.
 
     Una vez marcada, la tarjeta pierde el vidrio esmerilado y baja a superficie
     plana: así se distingue de un vistazo lo que queda por hacer de lo que ya
@@ -769,15 +778,14 @@ def _tarjeta(oferta: dict, perfil: str, ver: str, desde: str = "todo",
                   onclick="return marcar(this, true)">Descartar la oferta</button>
         </div>
       </details>
+      <button class="fantasma" name="archivar" value="1"
+              formaction="/archivar" formnovalidate
+              title="No le doy bola, por la razón que sea. La saca de la lista sin pedir motivo y sin enseñarle nada al sistema. Se puede devolver desde Archivadas.">Archivar</button>
       <details class="menu">
         <summary title="Más opciones" aria-label="Más opciones">{ICONOS['mas']}</summary>
         <div class="panel">
           <a href="/mensajes?perfil={esc(perfil)}&url={enlace}">Mensaje para escribirle</a>
           <a href="/consejo?perfil={esc(perfil)}&url={enlace}">Consejo para el CV</a>
-          <button class="fantasma" name="archivar" value="1"
-                  formaction="/archivar" formnovalidate>Ya no está</button>
-          <p class="nota">Archivar saca el aviso de la lista sin enseñarle nada al
-          sistema sobre lo que te gusta. Se puede devolver.</p>
         </div>
       </details>
     </form>
@@ -806,9 +814,10 @@ VACIO = {
                   "todas: cuando entren ofertas nuevas van a aparecer las que "
                   "el filtro saque.", False),
     "archivadas": ("No archivaste ninguna todavía.",
-                   "Archivar es para los avisos que ya no están o quedaron viejos. "
-                   "No es lo mismo que descartar: no le enseña nada al sistema "
-                   "sobre tus gustos, sólo los saca de la lista.", False),
+                   "Archivar es para las ofertas a las que no les das bola, por "
+                   "la razón que sea: muy viejas, no eran una oferta, o lo que "
+                   "fuere. No pide motivo y no le enseña nada al sistema: sólo "
+                   "las saca de la lista.", False),
     "todas": ("Todavía no hay ofertas guardadas.",
               "Buscá ahora para correr la primera búsqueda. Tarda unos minutos y "
               "podés seguir usando la pantalla mientras tanto.", True),
@@ -1904,13 +1913,16 @@ def _solapadas(e: dict) -> str:
         return ""
     una = "oferta cae" if cuantas == 1 else "ofertas caen"
     return (f'<p class="explica">Las filas suman más que las ofertas: '
-            f'{cuantas} {una} por los dos filtros a la vez y se cuentan en '
-            f'los dos. Son {e.get("sistema_total", 0)} distintas.</p>')
+            f'{cuantas} {una} por más de un filtro a la vez y se cuentan en '
+            f'cada uno. Son {e.get("sistema_total", 0)} distintas.</p>')
 
 
 _MOTIVOS_SISTEMA = {
     "idioma": "Piden un inglés más alto que el tuyo",
     "lugar": "El lugar o la modalidad no te sirven",
+    "no_es_oferta": "No es una oferta de trabajo",
+    "tecnologias": "Pide tecnologías que no usás, sin alternativa",
+    "nivel": "Es para un nivel menor al que buscás",
 }
 
 

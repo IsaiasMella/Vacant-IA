@@ -93,6 +93,21 @@ class Job:
     # inglés? Es más confiable que deducirlo de english_level, que el modelo
     # deja vacío con frecuencia. None = no se sabe.
     requires_english: bool | None = None
+    # ¿Es una vacante, o un posteo que habla de otra cosa? Lo juzga el LLM.
+    # Medido el 17/9/2026: 10 descartes de Isaías decían "no es una oferta", y
+    # todos venían de `google_posts`, que trae posteos de LinkedIn sobre el tema
+    # buscado aunque no busquen a nadie. None = no se sabe, y no filtra.
+    is_job_offer: bool | None = None
+    # Las tecnologías de `filters.tecnologias_que_no_uso` que el aviso EXIGE sin
+    # dar una alternativa que la persona use. "Java o .NET" las exige; "Python o
+    # Java" no. Lo juzga el LLM porque la diferencia está en la "o", y una lista
+    # de palabras no la ve: "Java" aparece en los dos. "" = no exige ninguna.
+    unwanted_tech: str = ""
+    # El nivel MÁS ALTO que el aviso acepta: junior | semi-senior | senior |
+    # lead, o "" si no lo dice. "SSr/Sr" es senior: lo que importa es si la
+    # persona entra. Agregado el 25/9/2026: Isaías descartaba a mano las
+    # Semi Senior ("no busco posiciones que no sean SR") y seguían llegando.
+    seniority: str = ""
 
     # --- Feedback de la persona (lo escribe la pestaña Trabajos de la UI) ---
     # Es la materia prima del ciclo de aprendizaje: las descartadas con su
@@ -100,18 +115,19 @@ class Job:
     # como positivos. Se guardan en job_history.json vía State.record_feedback.
     aplicado: bool | None = None   # True verde, False rojo, None todavía sin mirar
     motivo_descarte: str = ""      # por qué no sirve. Obligatorio cuando aplicado=False
-    # Cuál de los motivos del desplegable (ver `ui.data.MOTIVOS`). "" = texto
+    # Cuál de los motivos del desplegable (ver `vacantia.motivos.MOTIVOS`). "" = texto
     # libre. Separado del texto porque un motivo elegido se puede contar y
     # agrupar, y uno escrito a mano no: las mismas 46 razones habían entrado
     # con cuatro redacciones distintas.
     motivo_clave: str = ""
     fecha_feedback: str = ""       # ISO-8601 UTC. "" = nunca se lo miró
 
-    # Archivada: la publicación venció o ya la bajaron. **No es lo mismo que
+    # Archivada: la persona no le da bola, por la razón que sea (vieja, no era
+    # una oferta, lo que fuere). **No es lo mismo que
     # descartada**, y por eso es un campo aparte y no un valor más de
     # `aplicado`. El motivo de un descarte dice algo del puesto y va al prompt
-    # de scoring como ejemplo negativo; "el aviso ya no está" no dice nada de
-    # si servía, y meterlo ahí le enseñaría al sistema una preferencia falsa.
+    # de scoring como ejemplo negativo; archivar no lleva motivo, y meterlo ahí
+    # le enseñaría al sistema una preferencia que nadie dijo tener.
     archivada: bool = False
     fecha_archivada: str = ""      # ISO-8601 UTC
 

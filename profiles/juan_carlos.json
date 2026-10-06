@@ -1,0 +1,156 @@
+{
+  "name": "juan_carlos",
+  "cv_path": "resume/juan_carlos.md",
+  "keywords": [],
+  "min_score": 60,
+  "top_n": 5,
+  "max_new_per_run": 30,
+  "notify_when_empty": true,
+  "filters": {
+    "max_age_days": 7,
+    "location": {
+      "country": "Argentina",
+      "city": []
+    },
+    "work_modes": [],
+    "language": {
+      "allow_english": false,
+      "max_english_level": "A2",
+      "scan_description": true
+    },
+    "excluir_titulos": []
+  },
+  "report": {
+    "english_pain": false
+  },
+  "candidate": {
+    "name": "Juan Carlos",
+    "profile": "supervisor de QHSE",
+    "seeking": "supervisor de QHSE",
+    "not_suitable": "no me sirve nada que no sea de petroleo o gas",
+    "phone": "",
+    "relocation_note": "",
+    "search_seniority": "",
+    "search_keywords": "",
+    "headline": ""
+  },
+  "llm": {
+    "provider": "gemini",
+    "gemini_api_key": "${GEMINI_API_KEY}",
+    "model": "gemini-3.5-flash-lite",
+    "fallback_models": [
+      "gemini-flash-lite-latest",
+      "gemini-3.6-flash"
+    ],
+    "openrouter_api_key": "${OPENROUTER_API_KEY}"
+  },
+  "sources": [
+    {
+      "type": "careers",
+      "enabled": false,
+      "companies_file": "companies-juan_carlos.json",
+      "api_key": "${TINYFISH_API_KEY}",
+      "use_search": true,
+      "max_companies": null
+    },
+    {
+      "type": "google_posts",
+      "enabled": false,
+      "provider": "tinyfish",
+      "language": "es",
+      "roles": [],
+      "max_queries": 4,
+      "results_per_query": 10
+    },
+    {
+      "type": "linkedin",
+      "enabled": false,
+      "search_terms": [],
+      "locations": [
+        "Argentina"
+      ],
+      "is_remote": false,
+      "results_wanted": 25,
+      "hours_old": 168,
+      "fetch_description": true,
+      "delay_between_searches": 5,
+      "max_searches": 3
+    },
+    {
+      "type": "rrhh",
+      "enabled": false,
+      "profiles": [],
+      "max_profiles": 12,
+      "api_key": "${TINYFISH_API_KEY}"
+    },
+    {
+      "type": "bumeran",
+      "enabled": false,
+      "search_terms": [],
+      "location": "",
+      "max_queries": 3,
+      "results_wanted": 20,
+      "api_key": "${TINYFISH_API_KEY}"
+    },
+    {
+      "type": "zonajobs",
+      "enabled": false,
+      "search_terms": [],
+      "location": "",
+      "max_queries": 3,
+      "results_wanted": 20,
+      "api_key": "${TINYFISH_API_KEY}"
+    },
+    {
+      "type": "computrabajo",
+      "enabled": false,
+      "search_terms": [],
+      "location": "",
+      "max_queries": 3,
+      "results_wanted": 20,
+      "api_key": "${TINYFISH_API_KEY}"
+    },
+    {
+      "type": "dummy",
+      "enabled": false
+    },
+    {
+      "type": "indeed",
+      "enabled": false,
+      "search_terms": [],
+      "results_wanted": 20,
+      "max_queries": 2
+    },
+    {
+      "type": "getonbrd",
+      "enabled": false,
+      "search_terms": [],
+      "country_code": "AR",
+      "results_wanted": 30,
+      "max_queries": 2
+    }
+  ],
+  "notifiers": [
+    {
+      "type": "telegram",
+      "enabled": true,
+      "token": "${TELEGRAM_TOKEN}",
+      "chat_id": "${TELEGRAM_CHAT_ID}"
+    },
+    {
+      "type": "console",
+      "enabled": true
+    }
+  ],
+  "cvs": [
+    {
+      "id": "principal",
+      "nombre": "Midstream",
+      "path": "resume/juan_carlos.md",
+      "palabras_clave": [
+        "Supervisor QHSE",
+        "QHSE"
+      ]
+    }
+  ]
+}

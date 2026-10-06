@@ -239,10 +239,11 @@ class State:
     def archivar(self, urls: list[str], archivada: bool = True) -> int:
         """Guarda (o saca) el archivado de varias ofertas. Devuelve cuántas tocó.
 
-        **Archivar no es descartar.** Un descarte lleva un motivo que dice algo
-        del puesto, y ése va al prompt de scoring como ejemplo negativo. "El
-        aviso ya no está" no dice nada de si el puesto servía: mezclarlos le
-        enseñaría al sistema una preferencia que nadie tuvo.
+        **Archivar no es descartar.** Es "no le doy bola a esta oferta", por la
+        razón que sea (muy vieja, no era una oferta, lo que fuere), y no lleva
+        motivo. Un descarte sí, y ése va al prompt de scoring como ejemplo
+        negativo: mezclarlos le enseñaría al sistema una preferencia que nadie
+        dijo tener.
 
         Las archivadas **no vuelven a entrar** en las corridas siguientes, pero
         no porque se archiven: sus claves ya están en `seen_jobs.json` desde que

@@ -366,6 +366,121 @@ def passes_language(job: Job, cfg: dict) -> tuple[bool, str]:
     return True, ""
 
 
+def passes_offer(job: Job) -> tuple[bool, str]:
+    """¿Es una vacante? Sólo filtra cuando el modelo dijo que no.
+
+    Existe aparte del puntaje 0 que ya le pone `scoring` porque la pantalla no
+    esconde por puntaje: "Sin marcar" lista todo lo puntuado, de 90 a 0, y ahí
+    se veían los posteos de LinkedIn que hablan de AI Engineering sin buscar a
+    nadie. Sin juicio del modelo (None) pasa, como todo lo que no se sabe.
+    """
+    if job.is_job_offer is False:
+        return False, "no es una oferta de trabajo"
+    return True, ""
+
+
+def tecnologias_que_no_usa(profile_o_filtros: dict) -> list[str]:
+    """`filters.tecnologias_que_no_uso` como lista. Acepta el perfil o sus filtros."""
+    cfg = profile_o_filtros.get("filters", profile_o_filtros) or {}
+    valor = cfg.get("tecnologias_que_no_uso")
+    if isinstance(valor, str):
+        valor = valor.split(",")
+    return [t.strip() for t in _as_list(valor) if t.strip()]
+
+
+def passes_tech(job: Job, filtros: dict) -> tuple[bool, str]:
+    """¿Exige una tecnología que la persona no usa, sin darle alternativa?
+
+    El juicio lo hace el modelo (`Job.unwanted_tech`), porque todo depende de la
+    "o": "Java o .NET" deja afuera a quien no usa ninguna de las dos, y "Python o
+    Java" no. Acá sólo se confirma que lo que nombró **siga** en la lista de la
+    persona: se calcula al leer, así que sacar "Java" de Mi perfil devuelve solas
+    las ofertas que se cayeron por Java.
+    """
+    no_usa = {norm(t) for t in tecnologias_que_no_usa(filtros)}
+    if not no_usa or not job.unwanted_tech:
+        return True, ""
+    exigidas = [t.strip() for t in job.unwanted_tech.split(",") if t.strip()]
+    vigentes = [t for t in exigidas if norm(t) in no_usa]
+    if vigentes:
+        return False, f"pide {', '.join(vigentes)} sin alternativa que uses"
+    return True, ""
+
+
+# --- nivel del puesto ---------------------------------------------------------
+#
+# Isaías busca sólo Senior, y lo decía en texto libre al descartar ("Era una
+# posicion SSR y no busco posiciones que no sean SR", "semi senior no acepto").
+# Como ejemplo en el prompt eso pesa poco: son 2 de 12 renglones. Una regla
+# explícita no depende de cuántos ejemplos entren.
+
+#: De menor a mayor. La clave es la que se guarda en el perfil y en el `Job`.
+SENIORITIES = ("junior", "semi-senior", "senior", "lead")
+ETIQUETAS_SENIORITY = {
+    "junior": "Junior",
+    "semi-senior": "Semi Senior",
+    "senior": "Senior",
+    "lead": "Líder / Tech Lead",
+}
+
+# El título es la fuente más firme: lo escribió quien publica y el modelo a veces
+# deja el campo vacío. "Semi Senior" contiene "Senior", así que se reconoce y se
+# borra antes de buscar "senior" suelto. "SSr/Sr" y "Semi Senior / Senior" pasan:
+# alcanza con que el aviso acepte el nivel de la persona.
+_SEMI = re.compile(r"\bsemi[\s\-]*senior\b|\bsemi[\s\-]*sr\b|\bssr\b|\bsemisenior\b")
+_SENIOR = re.compile(r"\bsenior\b|\bsr\b|\bsenr\b")
+_LEAD = re.compile(r"\blead\b|\blider\b|\bleader\b|\bprincipal\b|\bstaff\b|\bjefe\b")
+_JUNIOR = re.compile(r"\bjunior\b|\bjr\b|\btrainee\b|\bpasante\b|\bpracticante\b"
+                     r"|\bintern\b|\binternship\b|\bpasantia\b")
+
+
+def seniority_minima(profile_o_filtros: dict) -> str:
+    """`filters.seniority_minima` validada, o "" si no hay mínimo."""
+    cfg = profile_o_filtros.get("filters", profile_o_filtros) or {}
+    valor = norm(str(cfg.get("seniority_minima") or "")).replace(" ", "-")
+    return valor if valor in SENIORITIES else ""
+
+
+def nivel_del_titulo(titulo: str) -> str:
+    """El nivel más alto que nombra el título, o "" si no nombra ninguno."""
+    t = norm(titulo or "")
+    if _LEAD.search(t):
+        return "lead"
+    sin_semi = _SEMI.sub(" ", t)
+    if _SENIOR.search(sin_semi):
+        return "senior"
+    if sin_semi != t:
+        return "semi-senior"
+    if _JUNIOR.search(t):
+        return "junior"
+    return ""
+
+
+def nivel_del_aviso(job: Job) -> str:
+    """El nivel del aviso: el del título si lo dice, si no el que juzgó el modelo.
+
+    El título manda porque se puede verificar leyéndolo, y porque las ofertas
+    puntuadas antes de que existiera `Job.seniority` sólo tienen eso.
+    """
+    for titulo in (job.scored_title, job.title):
+        if nivel := nivel_del_titulo(titulo):
+            return nivel
+    modelo = norm(job.seniority or "").replace(" ", "-")
+    return modelo if modelo in SENIORITIES else ""
+
+
+def passes_seniority(job: Job, filtros: dict) -> tuple[bool, str]:
+    """¿El aviso acepta el nivel mínimo de la persona? Si no lo dice, pasa."""
+    minima = seniority_minima(filtros)
+    nivel = nivel_del_aviso(job)
+    if not minima or not nivel:
+        return True, ""
+    if SENIORITIES.index(nivel) < SENIORITIES.index(minima):
+        return False, (f"es para {ETIQUETAS_SENIORITY[nivel]} y buscás "
+                       f"{ETIQUETAS_SENIORITY[minima]} o más")
+    return True, ""
+
+
 @dataclass
 class FilterStats:
     """Qué se descartó y por qué. Lo consume el informe de la notificación."""
@@ -480,10 +595,9 @@ def descartar_antes_de_puntuar(
 def apply_filters(jobs: list[Job], profile: dict) -> tuple[list[Job], FilterStats]:
     """Aplica los tres filtros. Devuelve (las que pasan, estadísticas)."""
     stats = FilterStats()
+    # Sin `filters` en el perfil igual se corre: "no es una oferta" no depende
+    # de ninguna preferencia, y las demás reglas con config vacía no sacan nada.
     cfg = profile.get("filters") or {}
-    if not cfg:
-        stats.kept = len(jobs)
-        return jobs, stats
 
     location_cfg = cfg.get("location") or {}
     modes_cfg = cfg.get("work_modes")
@@ -492,6 +606,25 @@ def apply_filters(jobs: list[Job], profile: dict) -> tuple[list[Job], FilterStat
     kept: list[Job] = []
     dropped: list[tuple[Job, str]] = []
     for job in jobs:
+        # Primero lo que no es una vacante: ningún otro motivo importa ahí.
+        ok, why = passes_offer(job)
+        if not ok:
+            dropped.append((job, why))
+            stats.by_reason["no_es_oferta"] += 1
+            continue
+
+        ok, why = passes_tech(job, cfg)
+        if not ok:
+            dropped.append((job, why))
+            stats.by_reason["tecnologias"] += 1
+            continue
+
+        ok, why = passes_seniority(job, cfg)
+        if not ok:
+            dropped.append((job, why))
+            stats.by_reason["nivel"] += 1
+            continue
+
         # Ubicación y modalidad van juntas (regla de Bahía Blanca), el idioma
         # aparte. `passes_place` ya devuelve con qué etiqueta contar el descarte.
         ok, why, etiqueta = passes_place(job, location_cfg, modes_cfg)

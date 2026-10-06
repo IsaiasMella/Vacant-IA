@@ -10,6 +10,7 @@ import time
 
 from vacantia.config import id_de_cv
 from vacantia.consejo import cv_que_mejor_encaja
+from vacantia.filters import seniority_minima, tecnologias_que_no_usa
 from vacantia.llm import chat_with_llm, has_llm_credentials
 from vacantia.log import get_logger
 from vacantia.models import Job
@@ -37,7 +38,7 @@ CANDIDATE:
 RESUME SUMMARY:
 {resume_summary}
 
-JOBS TO SCORE:
+{past_decisions}JOBS TO SCORE:
 {jobs_text}
 
 For each job output:
@@ -54,8 +55,36 @@ For each job output:
   "work_mode": "remote | hybrid | onsite",
   "posting_language": "ISO 639-1 code of the language the posting is WRITTEN in (es, en, pt...)",
   "english_level": "CEFR level of English the job REQUIRES (A1, A2, B1, B2, C1, C2)",
-  "requires_english": true/false
+  "requires_english": true/false,
+  "is_job_offer": true/false,
+  "unwanted_tech": "technologies from the candidate's DOES NOT USE list that the job requires with no alternative, or empty",
+  "seniority": "junior | semi-senior | senior | lead: the HIGHEST level the job accepts, or empty"
 }}
+
+JOB OFFER — is_job_offer is true only if the text announces an open position
+someone is hiring for. It is false for everything else, even when it talks about
+the same field: opinion or news posts ("the future of AI engineering"), courses,
+events, personal or motivational stories, someone celebrating a new job or
+looking for one, tips for candidates, a page of comments. An informal post that
+clearly says "we're looking for a developer" IS a job offer. When false, score
+MUST be 0 and worth_applying false: it is not a job, however well it matches.
+
+UNWANTED TECH — the CANDIDATE section may list technologies they do NOT use.
+unwanted_tech names the ones from THAT list the job requires, when the posting
+gives no alternative the candidate does use. It is a judgement about "or":
+  * "Backend in Java or .NET, frontend in React", with Java and .NET on the list
+    -> "Java, .NET". React does not save it: the core of the job is a technology
+    the candidate does not use.
+  * "Backend in Python or Java" -> "" (Python is an accepted alternative).
+  * a listed technology only as "nice to have", "a plus", "deseable" -> "".
+  * no DOES NOT USE list in the CANDIDATE section -> "".
+When unwanted_tech is not empty, the job is a poor fit: score it below 40.
+
+SENIORITY — the highest level the posting accepts. "SSr/Sr" or "Semi Senior o
+Senior" -> "senior". "Trainee", "pasante", "intern" -> "junior". "Tech Lead",
+"Líder técnico" -> "lead". "" if the posting does not say it: years of
+experience alone are not a level. If the CANDIDATE section states a MINIMUM
+SENIORITY and the job is below it, the job is a poor fit: score it below 40.
 
 CRITICAL — the last five fields are used to filter jobs out, so a wrong guess
 silently discards a good job. Use "" (empty string) whenever the posting does
@@ -219,6 +248,16 @@ def build_candidate_profile(profile: dict, varios_cv: bool = False) -> str:
     keywords = profile.get("keywords") or []
     if keywords:
         lines.append(f"- Keywords of interest: {', '.join(keywords)}")
+    # Con "NO suitable" en texto libre no alcanzaba: Isaías lo tenía para los
+    # puestos de ML y el modelo igual dejaba pasar "Backend Java o .NET" porque
+    # el aviso también pedía React. Es una lista aparte porque el filtro la usa
+    # para decidir, no sólo el modelo para puntuar (ver `filters.passes_tech`).
+    if no_usa := tecnologias_que_no_usa(profile):
+        lines.append(f"- DOES NOT USE (technologies): {', '.join(no_usa)}")
+    # Lo mismo con el nivel: "no busco posiciones que no sean SR" estaba en los
+    # descartes de Isaías, y como ejemplo suelto el modelo no lo generalizaba.
+    if minima := seniority_minima(profile):
+        lines.append(f"- MINIMUM SENIORITY: {minima}")
     return "\n".join(lines)
 
 
@@ -301,13 +340,18 @@ def _parse_scored_array(raw: str) -> list[dict]:
 
 
 def _score_batch_with_llm(jobs: list[Job], cvs: list[dict], profile: dict,
-                          min_score: int) -> list[Job]:
+                          min_score: int, decisiones: str = "") -> list[Job]:
+    """`decisiones` es el bloque de `aprendizaje.decisiones_para_el_prompt`.
+
+    Vacío (una persona que todavía no marcó nada) no deja rastro en el prompt.
+    """
     if len(cvs) == 1:
         # Un solo CV: el prompt de siempre, byte a byte. Nada cambia para quien
         # no cargó un segundo CV.
         prompt = SCORE_PROMPT.format(
             candidate_profile=build_candidate_profile(profile),
             resume_summary=(cvs[0].get("texto") or "")[:2500],
+            past_decisions=decisiones,
             jobs_text=_jobs_text(jobs),
             min_score=min_score,
         )
@@ -316,6 +360,7 @@ def _score_batch_with_llm(jobs: list[Job], cvs: list[dict], profile: dict,
             candidate_profile=build_candidate_profile(profile, varios_cv=True),
             cvs_text=_cvs_text(cvs),
             ids=", ".join(cv["id"] for cv in cvs),
+            past_decisions=decisiones,
             jobs_text=_jobs_text(jobs),
             min_score=min_score,
         )
@@ -357,6 +402,14 @@ def _score_batch_with_llm(jobs: list[Job], cvs: list[dict], profile: dict,
         job.english_level = _clean(item.get("english_level")).upper()[:2]
         req = item.get("requires_english")
         job.requires_english = bool(req) if isinstance(req, bool) else None
+        oferta = item.get("is_job_offer")
+        job.is_job_offer = oferta if isinstance(oferta, bool) else None
+        job.unwanted_tech = _clean(item.get("unwanted_tech"))
+        job.seniority = _clean(item.get("seniority")).lower()
+        if job.is_job_offer is False:
+            # El prompt lo pide, pero no se confía en que lo cumpla: un posteo
+            # que no busca a nadie no puede quedar con 70 y llegar al Telegram.
+            job.score, job.worth_applying = 0, False
         logger.debug(f"    [{job.score:3d}] {job.display_title} — {job.reason[:80]}")
 
     return jobs
@@ -438,10 +491,11 @@ def _score_batch_heuristic(jobs: list[Job], cvs: list[dict], profile: dict,
     return jobs
 
 
-def score_jobs(jobs: list[Job], resume, profile: dict) -> list[Job]:
+def score_jobs(jobs: list[Job], resume, profile: dict, decisiones: str = "") -> list[Job]:
     """Puntúa en lotes. Nunca levanta: si el LLM falla, cae a la heurística.
 
     `resume` es la lista de `config.load_resumes`; un texto suelto también sirve.
+    `decisiones`: lo que la persona ya marcó, ver `aprendizaje`.
     """
     if not jobs:
         return []
@@ -463,7 +517,7 @@ def score_jobs(jobs: list[Job], resume, profile: dict) -> list[Job]:
                 logger.debug(f"  Espero {demora:.0f}s entre lotes (límite por minuto)")
                 time.sleep(demora)
             try:
-                out.extend(_score_batch_with_llm(batch, cvs, profile, min_score))
+                out.extend(_score_batch_with_llm(batch, cvs, profile, min_score, decisiones))
                 continue
             except Exception as e:
                 logger.error(f"  Falló el scoring con LLM ({e}) — caigo a la heurística en este lote")

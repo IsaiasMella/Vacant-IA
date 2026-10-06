@@ -265,7 +265,9 @@ button.peligro:hover { border-color: var(--color-danger); background: var(--colo
 
 /* La fila de acciones: la primaria, la alternativa real de ese momento, y el
    menú de tres puntos. Más de dos controles visibles por oferta es un error
-   de diseño, así que todo lo demás vive adentro del menú. */
+   de diseño, así que todo lo demás vive adentro del menú. La excepción es
+   "Archivar", en fantasma: escondido en el menú nadie lo encontraba (ver
+   `render._tarjeta`). */
 .acciones { display: flex; align-items: center; gap: var(--spacing-sm);
             flex-wrap: wrap; margin: 0;
             padding-top: var(--spacing-md);

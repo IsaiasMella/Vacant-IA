@@ -176,17 +176,18 @@ tiene:
   mismo puntaje pegadas, sin eso no se nota cuál desapareció.
 - **Al lado, No apliqué.** Al tocarlo se abre, adentro de la misma tarjeta, el
   motivo: un desplegable con los cuatro de siempre y un campo para escribir. Con
-  cualquiera de los dos alcanza. Ese motivo es lo único que después sirve para
-  que el sistema aprenda qué no mostrarte.
+  cualquiera de los dos alcanza. Ese motivo es lo que el sistema usa para
+  aprender qué no mostrarte (ver [Cómo aprende](#cómo-aprende-de-lo-que-marcás)).
+- **Archivar**, en gris, siempre a la vista: para las ofertas a las que no les
+  das bola, por la razón que sea (muy vieja, no era una oferta, o lo que fuere).
+  **No es lo mismo que descartar**: no pide motivo y no le enseña nada al
+  sistema sobre lo que te gusta. Va a *Archivadas* y se puede devolver.
 - **Un menú de tres puntos** en la esquina, con lo que no se usa todos los días:
   - **"Mensaje para escribirle"**: el mensaje para mandarle a quien publicó, por
     LinkedIn o por mail, escrito a partir del aviso y tu CV.
   - **"Consejo para el CV"**: qué reordenar y qué palabra falta para pasar el
     filtro automático de la empresa. **Nunca reescribe tu CV**: te dice qué mover
     para que lo edites vos.
-  - **"Ya no está"**: para el aviso que bajaron o que quedó viejo. **No es lo
-    mismo que descartar**: no pide motivo y no le enseña nada al sistema sobre lo
-    que te gusta. Va a *Archivadas* y se puede devolver.
 
 Lo demás está escondido a propósito: con seis controles a la vista por oferta,
 cada tarjeta era una decisión de seis opciones en vez de una.
@@ -222,8 +223,11 @@ se muestra siempre, aunque el filtro también la sacara por idioma o por lugar.
 
 ### Filtradas
 
-El sistema descarta solo por dos cosas: que el aviso pida más inglés del que
-declaraste, y que el lugar o la modalidad no te sirvan. Esas ofertas no llegan a
+El sistema descarta solo por cinco cosas: que el aviso pida más inglés del que
+declaraste, que el lugar o la modalidad no te sirvan, que **no sea una oferta**
+(un posteo que habla del tema sin buscar a nadie), que **exija tecnologías que
+no usás** sin darte alternativa, y que sea **para un nivel menor** al que
+buscás. Esas ofertas no llegan a
 *Sin marcar*, y son muchas: pueden ser 20 de 23 en un día.
 
 Acá caen todas, con el motivo que dio el sistema, para que puedas contestar si
@@ -378,7 +382,7 @@ Ahí no hay ningún botón, a propósito: Métricas es una pantalla de lectura.
 ### Mi perfil
 
 Lo que cambia mientras buscás, sin tocar ningún archivo: tus CV, las palabras
-clave y los puestos que no querés, dónde y en qué idioma, las empresas y los
+clave, los puestos que no querés, las tecnologías que no usás, dónde y en qué idioma, las empresas y los
 reclutadores que seguís, y tus datos personales.
 
 Lo que se explica una sola vez está en el **signo de pregunta** al lado del
@@ -710,6 +714,69 @@ quien publicó no completó un campo.
 
 Cada descarte queda en el log con su motivo (`LOG_LEVEL=DEBUG` para verlos).
 
+### Lo que no es una oferta, y las tecnologías que no usás
+
+Dos juicios que hace el modelo al puntuar, porque una lista de palabras no los
+puede hacer:
+
+- **`is_job_offer`**: si el texto busca a alguien para un puesto. Un posteo de
+  LinkedIn sobre *"el futuro del AI Engineering"*, una historia sobre chicos y
+  deporte, un curso o alguien que festeja su trabajo nuevo **no son ofertas**,
+  aunque digan "buscamos" y hablen de lo tuyo. Van a 0 y a *Filtradas*. Pasaba
+  sobre todo con `google_posts`: los 10 descartes "no es una oferta" de Isaías
+  venían de ahí.
+- **`filters.tecnologias_que_no_uso`**: lo que no usás, desde *Mi perfil*. El
+  modelo lee **la descripción entera** y entiende la "o":
+
+  | El aviso dice | Con `[".NET", "Java", "C#"]` |
+  |---|---|
+  | Backend Java o .NET, frontend React | **afuera**: React no la salva |
+  | Backend Python o Java | entra: Python es alternativa |
+  | Java deseable | entra: no lo exige |
+
+  Complementa a `excluir_titulos`, que mira sólo el título y no gasta una
+  llamada. Si sacás una tecnología de la lista, las ofertas que se cayeron por
+  ésa vuelven solas: el filtro se calcula al leer.
+
+```jsonc
+"filters": { "tecnologias_que_no_uso": [".NET", "Java", "C#"] }
+```
+
+**Sólo aplica a lo puntuado después del 17/9/2026.** Lo anterior no tiene ese
+juicio guardado y se sigue mostrando como antes.
+
+### El nivel mínimo del puesto
+
+*Mi perfil → Nivel mínimo del puesto*: Junior, Semi Senior o Senior. Salen los
+avisos para un nivel menor. El nivel sale **primero del título** ("SSR", "Semi
+Senior", "Jr", "Trainee", "Practicante") y, si el título no dice nada, del que
+juzga el modelo leyendo el aviso. Un aviso que acepta varios niveles cuenta por
+el más alto: "SSr/Sr" entra si buscás Senior. Si el aviso no dice el nivel,
+pasa. Se calcula al leer: cambiar el mínimo devuelve o saca ofertas sin volver a
+puntuar.
+
+```jsonc
+"filters": { "seniority_minima": "senior" }
+```
+
+### Cómo aprende de lo que marcás
+
+No hay entrenamiento. En cada lote, el prompt lleva **tus últimas decisiones como
+ejemplos**, con el motivo en tus palabras, y el modelo puntúa lo parecido igual:
+
+- **Entran:** hasta 12 descartes por *no es una oferta*, *no era mi puesto*,
+  *pide tecnologías con las que no trabajo* o texto libre, y hasta 6 aplicadas.
+  Las más recientes, y un aviso republicado cuenta una sola vez. Cada ejemplo
+  lleva el stack del aviso, así "pide tecnologías con las que no trabajo" dice
+  cuáles.
+- **No entran:** *piden inglés* y *es presencial*, porque ya los aplican los
+  filtros, mejor y sin gastar prompt; y el *caso especial*, que es justamente
+  para que no enseñe.
+
+Suma unos 1.200 tokens por lote. Con 113 descartes enteros serían 10.000, y en el
+plan gratis eso es cuota. Una persona que todavía no marcó nada manda el mismo
+prompt que antes.
+
 ## Corridas sin resultados
 
 Con `notify_when_empty: true` el aviso llega igual y explica **por qué** no hubo
@@ -841,6 +908,14 @@ De cada aviso se leen **empresa, ciudad, modalidad y fecha de publicación** de 
 página del detalle, que se baja igual para la descripción. Los tres primeros los
 completa normalmente el modelo al puntuar; leerlos también en la fuente es lo que
 mantiene viva la regla de ubicación cuando el modelo se cae.
+
+La **empresa** además es lo que junta las republicaciones: en Computrabajo una
+consultora publica el mismo aviso varias veces, cada una con otra dirección, y
+sólo el control por empresa + título las reconoce como la misma. Si en la
+pantalla ves avisos de Computrabajo **sin empresa**, o titulados *Oferta De
+Trabajo De ...* con un código al final, el portal cambió la página y el lector
+dejó de entenderla: van a empezar a repetirse (pasó el 17/9/2026, ver
+`NOTAS-PARA-ISAIAS.md`, 2.40).
 
 La **fecha** no la llenaba nadie: medido el 7/9/2026 sobre 216 avisos, los tres
 portales reportaban `posted_at` en **cero** de sus 20. Eso dejaba ciego al filtro
@@ -1003,10 +1078,12 @@ vacantia/
 ├── engine.py         el flujo: fuentes → dedupe → scoring → filtros → notificación
 ├── models.py         Job: el modelo normalizado que hablan todas las fuentes
 ├── scoring.py        puntuar 0-100 contra el CV, con fallback heurístico
+├── aprendizaje.py    tus descartes y aplicadas, como ejemplos para el scoring
+├── motivos.py        los motivos de descarte y cuáles enseñan
 ├── llm.py            cadena de modelos, y distinguir sus errores
 ├── state.py          quitar duplicados y persistencia, por perfil
 ├── config.py         carga de perfiles y resolución de secretos
-├── filters.py        ubicación, modalidad e idioma
+├── filters.py        ubicación, modalidad, idioma, no-ofertas, tecnologías y nivel
 ├── fechas.py         leer el 'posted_at' de cada portal (4 formatos distintos)
 ├── agenda.py         reparto de horarios entre perfiles
 ├── mensajes.py       los mensajes al reclutador (DM y mail)
@@ -1055,8 +1132,8 @@ El estado vive en `state/<perfil>/` (`seen_jobs.json`, `last_run.json`,
 `State.record_feedback(...)` en `job_history.json`, que es el archivo durable:
 una oferta que vuelve a aparecer no pisa a la que ya está marcada.
 `State.feedback_jobs(aplicado=False)` devuelve las descartadas de la más reciente
-a la más vieja. **Todavía nada las lee**: es la base para meter esos ejemplos en
-el prompt de scoring y que el sistema aprenda.
+a la más vieja. **El scoring las lee** desde el 17/9/2026: ver
+[Cómo aprende de lo que marcás](#cómo-aprende-de-lo-que-marcás).
 
 ## Agregar una fuente
 

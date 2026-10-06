@@ -7,6 +7,7 @@ Source y Notifier. Cambiar de fuente o de canal no toca este archivo.
 import time
 from dataclasses import dataclass, field
 
+from vacantia.aprendizaje import decisiones_para_el_prompt
 from vacantia.config import load_resumes
 from vacantia.filters import (
     apply_filters,
@@ -188,8 +189,11 @@ def run(profile: dict, dry_run: bool = False) -> RunResult:
     to_score, deferred = triage(new_jobs, cvs, profile)
     result.deferred = len(deferred)
 
-    # 4) scoring contra el CV
-    scored = score_jobs(to_score, cvs, profile) if to_score else []
+    # 4) scoring contra el CV, con lo que la persona ya marcó como ejemplo.
+    #    Sin esto el sistema no aprendía: los descartes se guardaban y el modelo
+    #    nunca los veía (ver `aprendizaje`).
+    decisiones = decisiones_para_el_prompt(state.load_history()) if to_score else ""
+    scored = score_jobs(to_score, cvs, profile, decisiones) if to_score else []
     result.scored = len(scored)
 
     # 5) filtros de ubicación / modalidad / idioma

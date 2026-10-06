@@ -1648,8 +1648,11 @@ def test_la_tarjeta_no_muestra_mas_de_dos_controles(sitio):
 
     Antes se veían seis a la vez para una sola oferta: dos botones enfrentados,
     el desplegable de motivos, el campo de texto y "Ya no está". Ahora se ven
-    "Apliqué" y "No apliqué", y nada más: el bloque de motivo se despliega al
-    marcar "No apliqué" y el resto vive en el menú de tres puntos.
+    "Apliqué" y "No apliqué": el bloque de motivo se despliega al marcar "No
+    apliqué" y el resto vive en el menú de tres puntos.
+
+    La única excepción es "Archivar", en fantasma: escondido en el menú nadie lo
+    usaba, e Isaías lo pidió de vuelta a la vista el 25/9/2026.
     """
     import re
 
@@ -1660,11 +1663,12 @@ def test_la_tarjeta_no_muestra_mas_de_dos_controles(sitio):
 
     # Lo que se ve sin abrir nada: todo lo que está fuera de un <details>.
     a_la_vista = re.sub(r"<details.*?</details>", "", html, flags=re.S)
-    assert a_la_vista.count("<button") == 1          # sólo el primario
+    assert a_la_vista.count("<button") == 2          # el primario y archivar
+    assert a_la_vista.count('class="primario"') == 1
     assert "Apliqué" in a_la_vista
     assert "motivo_clave" not in a_la_vista          # el desplegable, adentro
     assert 'name="motivo"' not in a_la_vista         # el campo de texto, adentro
-    assert "Ya no está" not in a_la_vista            # el archivar, en el menú
+    assert ">Archivar</button>" in a_la_vista        # a la vista, en fantasma
 
     # Y el disparador del bloque de motivo es el segundo control, en secundario.
     assert "<summary>No apliqué</summary>" in html

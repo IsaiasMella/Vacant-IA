@@ -7,6 +7,9 @@ parezca a esto hay que verificarlo contra el portal (ver NOTAS-PARA-ISAIAS.md).
 
 import pytest
 
+from vacantia.models import Job
+from vacantia.sources.careers import title_from_url
+from vacantia.state import State
 from vacantia.sources.portales_ar import (
     BumeranSource,
     ComputrabajoSource,
@@ -239,6 +242,76 @@ def test_computrabajo_saca_empresa_y_ciudad_de_la_linea_del_titulo():
     assert datos["company"] == "Kaizen Recursos Humanos"
     assert datos["city"] == "Monserrat"          # el barrio, no la provincia
     assert datos["work_mode"] == "remote"
+
+
+#: Recorte real de Computrabajo (17/9/2026): el título ya no es la primera línea.
+DETALLE_COMPUTRABAJO_CON_VOLVER = """Volver al listado
+
+# Engineering Manager // Software Financiero - Remoto para residentes en Argentina
+
+Kaizen Recursos Humanos - Monserrat, Capital Federal
+
+Ya aplicaste a esta oferta
+
+Ocultaste esta oferta, pulsa
+Recuperar oferta
+para verla de nuevo en los listados
+
+## Descripción de la oferta
+
+A convenir
+Contrato por tiempo indeterminado
+Jornada completa
+Remoto
+"""
+
+
+def test_computrabajo_encuentra_el_titulo_aunque_no_sea_la_primera_linea():
+    """El 17/9/2026 el mismo aviso de Kaizen entró ocho veces.
+
+    La página empezó a arrancar con "Volver al listado", el lector exigía el
+    título en la primera línea y dejó todo vacío. Sin empresa no hay
+    `dedupe_key`, y las ocho republicaciones —cada una con su URL— pasaron.
+    """
+    datos = extraer_computrabajo(DETALLE_COMPUTRABAJO_CON_VOLVER)
+    assert datos["title"] == (
+        "Engineering Manager // Software Financiero - Remoto para residentes en Argentina"
+    )
+    assert datos["company"] == "Kaizen Recursos Humanos"
+    assert datos["city"] == "Monserrat"
+
+
+def test_las_republicaciones_de_computrabajo_se_deduplican(tmp_path):
+    """De punta a punta: dos URLs del mismo aviso, una sola oferta nueva."""
+    base = "https://ar.computrabajo.com/ofertas-de-trabajo/oferta-de-trabajo-de-engineering-manager-"
+    jobs = []
+    for codigo in ("79100B5AC36782D561373E686DCF3405", "71D8DDB3F71F6B6861373E686DCF3405"):
+        url = base + codigo
+        job = Job(url=url, title=title_from_url(url), source="computrabajo")
+        datos = extraer_computrabajo(DETALLE_COMPUTRABAJO_CON_VOLVER)
+        job.title, job.company = datos["title"], datos["company"]
+        jobs.append(job)
+    assert len(State("x", root=tmp_path).filter_new(jobs)) == 1
+
+
+def test_computrabajo_no_toma_un_subtitulo_como_titulo():
+    """Páginas sin `#` de título: salía "Descripción de la oferta" como título,
+    y dos avisos distintos quedaban llamados igual."""
+    datos = extraer_computrabajo(
+        "## Descripción de la oferta\n\nBuscamos Desarrollador React Senior.\n"
+    )
+    assert "title" not in datos and "company" not in datos
+
+
+def test_computrabajo_separa_la_empresa_del_lugar_por_el_ultimo_guion():
+    """"ADN - Recursos Humanos" es la empresa; antes quedaba "ADN" en la
+    ciudad "Recursos Humanos - Belgrano"."""
+    datos = extraer_computrabajo(
+        "Volver al listado\n\n# Ref. 21425: Lider de Desarrollo .Net\n\n"
+        "ADN - Recursos Humanos - Belgrano, Capital Federal\n"
+    )
+    assert datos["company"] == "ADN - Recursos Humanos"
+    assert datos["city"] == "Belgrano"
 
 
 def test_un_aviso_cross_posteado_no_rompe_la_lectura():

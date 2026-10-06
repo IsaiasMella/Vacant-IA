@@ -458,6 +458,23 @@ def extraer_computrabajo(texto: str) -> dict:
 
     No publica la modalidad como campo aparte, así que sale del texto.
 
+    **El título no es la primera línea.** Hasta el 16/9/2026 lo era; desde
+    entonces la página arranca con un link "Volver al listado" y recién después
+    viene el `#`. Exigir que la primera línea fuera el título dejó a todos los
+    avisos sin título ni empresa, y sin empresa `Job.dedupe_key` da "" y el
+    dedupe por empresa+título no corre: Kaizen tenía el mismo "Engineering
+    Manager" publicado ocho veces con ocho URLs distintas, y entraron las ocho.
+    Por eso se busca el primer `#` de nivel 1, esté donde esté.
+
+    Tiene que ser de nivel 1: hay páginas que vienen sin el `#` del título, y
+    el primer encabezado que aparece es "## Descripción de la oferta". Tomarlo
+    como título dejaba dos avisos distintos llamados igual.
+
+    La empresa se separa del lugar por el **último** " - " y no por el primero:
+    "ADN - Recursos Humanos - Belgrano, Capital Federal" es la empresa "ADN -
+    Recursos Humanos" en Belgrano, no "ADN" en "Recursos Humanos". El lugar
+    nunca lleva " - " con espacios ("Tigre, Buenos Aires-GBA").
+
     La fecha va suelta, sin etiqueta, al final de la descripción y justo antes
     de las ofertas similares:
 
@@ -470,13 +487,14 @@ def extraer_computrabajo(texto: str) -> dict:
     """
     datos: dict[str, str] = {}
 
-    cuerpo = [l.strip() for l in texto.splitlines() if l.strip()]
-    if cuerpo and cuerpo[0].startswith("#"):
-        datos["title"] = cuerpo[0].lstrip("# ").strip()
-    if len(cuerpo) >= 2 and cuerpo[0].startswith("#") and " - " in cuerpo[1]:
-        empresa, _, lugar = cuerpo[1].partition(" - ")
-        datos["company"] = empresa.strip()
-        datos["city"] = _ciudad(lugar)
+    cuerpo = [l.strip() for l in _solo_este_aviso(texto).splitlines() if l.strip()]
+    i = next((n for n, l in enumerate(cuerpo) if re.match(r"#\s", l)), None)
+    if i is not None:
+        datos["title"] = cuerpo[i][1:].strip()
+        if i + 1 < len(cuerpo) and " - " in cuerpo[i + 1] and not cuerpo[i + 1].startswith("#"):
+            empresa, _, lugar = cuerpo[i + 1].rpartition(" - ")
+            datos["company"] = empresa.strip()
+            datos["city"] = _ciudad(lugar)
 
     if fecha := _fecha(texto):
         datos["posted_at"] = fecha

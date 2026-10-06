@@ -32,7 +32,7 @@ No hay linter configurado.
 
 ## Arquitectura
 
-**Motor.** `run.py` → `engine.run(profile)`: fuentes → `Job` normalizado (`models.py`) → dedupe (`state.py`) → filtros previos → scoring (`scoring.py` + `llm.py`) → filtros de ubicación, modalidad e idioma (`filters.py`) → notificadores.
+**Motor.** `run.py` → `engine.run(profile)`: fuentes → `Job` normalizado (`models.py`) → dedupe (`state.py`) → filtros previos → scoring (`scoring.py` + `llm.py`, con los descartes de la persona como ejemplos vía `aprendizaje.py`) → filtros de no-oferta, tecnologías, ubicación, modalidad e idioma (`filters.py`) → notificadores.
 
 - **Interfaces:** el motor sólo conoce `Source.fetch() -> list[Job]` y `Notifier.send(jobs)`, registradas en `SOURCE_REGISTRY` y `NOTIFIER_REGISTRY`.
 - **Agregar una fuente:** registrarla y sumarla también a `FUENTES` en `ui/formulario.py`.

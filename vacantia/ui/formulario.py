@@ -20,7 +20,7 @@ se leía como un manual, y los campos, que son lo que se viene a tocar, quedaban
 perdidos entre explicaciones.
 """
 
-from vacantia.filters import home_cities
+from vacantia.filters import ETIQUETAS_SENIORITY, home_cities, seniority_minima
 from vacantia.log import get_logger
 from vacantia.ui import data
 from vacantia.ui.render import _ayuda_al_lado, _rotulo_con_ayuda, _tilde_con_ayuda, avisos, esc
@@ -289,6 +289,7 @@ def render_datos(nombre: str, perfil: dict, mensajes: list[tuple[str, str]],
     # `city` y `home_city` significan lo mismo; el formulario muestra una sola.
     ciudades = ", ".join(home_cities(loc))
     nivel = str(idioma.get("max_english_level", "A2")).upper()
+    minima = seniority_minima(filtros)
 
     return f"""{avisos(mensajes)}
 <h1>Mi perfil de {esc(nombre)}</h1>
@@ -324,6 +325,24 @@ dice con cuál mandarte, y cada CV suma sus propias búsquedas.</p>
               "antes de puntuarlo. Sólo mira el título: un aviso de AI Engineer "
               "puede nombrar 'machine learning' entre las tecnologías del equipo, "
               "y ése no se pierde.")}
+  {_campo("tecnologias_que_no_uso", "Tecnologías que NO uso",
+          _lista(filtros.get("tecnologias_que_no_uso") or []),
+          placeholder="Java, .NET, C#",
+          ayuda="Separadas por coma. Salen las ofertas que las exigen sin alternativa.",
+          mas="Mira la descripción entera, no sólo el título, y entiende la 'o': "
+              "'backend en Java o .NET' se descarta aunque también pida React, "
+              "pero 'Python o Java' entra. Si sacás una de la lista, las ofertas "
+              "que se habían caído por ésa vuelven solas.")}
+  <div class="campo">
+    <label for="seniority_minima">Nivel mínimo del puesto</label>
+    <select id="seniority_minima" name="seniority_minima">
+      <option value=""{"" if minima else " selected"}>Cualquiera</option>
+      {"".join(f'<option value="{c}"{" selected" if c == minima else ""}>{esc(e)}</option>'
+               for c, e in ETIQUETAS_SENIORITY.items() if c != "lead")}
+    </select>
+    <p class="ayuda">Salen los avisos para un nivel menor. "SSr/Sr" entra si
+    elegís Senior: alcanza con que te acepten.</p>
+  </div>
 </div>
 
 <h2>Dónde y en qué idioma</h2>
@@ -644,6 +663,11 @@ def aplicar_datos(nombre: str, form: dict) -> list[tuple[str, str]]:
     # que cada término que se agrega acá es plata que no se gasta.
     if "excluir_titulos" in form:
         filtros["excluir_titulos"] = _lista_desde(form.get("excluir_titulos", ""))
+    if "tecnologias_que_no_uso" in form:
+        filtros["tecnologias_que_no_uso"] = _lista_desde(form.get("tecnologias_que_no_uso", ""))
+    if "seniority_minima" in form:
+        valor = form.get("seniority_minima", "").strip()
+        filtros["seniority_minima"] = valor if valor in ETIQUETAS_SENIORITY else ""
 
     cand = perfil.setdefault("candidate", {})
     for campo in ("name", "headline", "profile", "seeking", "not_suitable"):

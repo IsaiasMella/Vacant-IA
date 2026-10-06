@@ -1,47 +1,38 @@
 # Notas para Isaías
 
-**611 tests pasan.**
+**649 tests pasan.**
 
 ```
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.venv\Scripts\python.exe -m pytest tests -q      →  611 passed
+.venv\Scripts\python.exe -m pytest tests -q      →  649 passed
 ```
 
 Andando todo: los 3 portales argentinos, Indeed, Get on Board, LinkedIn Jobs,
 las páginas de empleo de las empresas, seguir reclutadores, el scoring con
 Gemini y la pantalla.
 
+Este archivo es corto a propósito: qué falta, qué hay que saber para usarlo, y
+las decisiones que no conviene deshacer. El porqué detallado de cada cosa está
+en los docstrings del código. La versión larga de estas notas está en el
+historial de git, en el commit `fe29188`; 2.40 y 2.41 no llegaron a esa versión.
+
 ---
 
 # 1. LO QUE FALTA HACER
 
-| # | Qué | Dónde | Cuánto lleva |
-|---|---|---|---|
-| 1 | **Cargar tu CV de Full Stack**, con sus palabras de búsqueda. Hasta que no lo cargues, nada de 2.29 se nota | Mi perfil → Mis CV | tuyo |
-| 2 | **Decidir qué hacés con el inglés.** Hay 90 ofertas ya puntuadas esperando detrás de esa casilla (2.28) | Mi perfil | tuyo |
-| 3 | **Usarlo una semana** y anotar qué falla antes de pasárselo a nadie | — | tuyo |
+| # | Qué | Dónde |
+|---|---|---|
+| 1 | **Cargar tu CV de Full Stack**, con sus palabras de búsqueda. Hasta entonces 2.29 no se nota | Mi perfil → Mis CV |
+| 2 | **Decidir qué hacés con el inglés.** Hay unas 90 ofertas ya puntuadas esperando detrás de esa casilla (2.28) | Mi perfil |
+| 3 | **Usarlo una semana** y anotar qué falla antes de pasárselo a nadie | — |
+| 4 | **4 ofertas viejas sin los juicios de 2.41** (3 de `google_posts`, 1 de .NET). Marcarlas a mano o re-puntuarlas (4 llamadas) | Trabajos |
 
-**Ya está instalado y corriendo solo** (5/9/2026). La tarea `Vacantia - isaias`
-quedó registrada, con la próxima corrida a las 12:00 y los cuatro disparadores:
-uno al iniciar sesión y tres diarios. No hay que prender nada.
-
-Lo de armarle la carpeta a cada persona queda para después de la semana de
-prueba: no tiene sentido repartir algo que todavía no sabés si tiene bugs.
-
-Sin empezar, y afuera a propósito: **que el sistema aprenda de tus descartes**.
-`State.feedback_jobs(aplicado=False, limit=15)` ya devuelve las últimas
-descartadas con su motivo; falta meterlas en `scoring.SCORE_PROMPT` como
-ejemplos negativos. Media hora, y ahora que el LLM anda tiene sentido.
-
-Desde el 8/9 hay una pieza más lista para eso: los motivos vienen **clasificados**
-(`motivo_clave`), y `ui.data.MOTIVOS_QUE_NO_ENSENIAN` marca cuáles NO tienen que
-entrar al prompt. "Piden inglés" y "es presencial" son restricciones que los
-filtros ya aplican solos y mejor; el caso especial lo pidió Isaías. Lo que sí
-enseña es el texto libre, que es el descarte que dice algo del puesto (2.9).
+Ya está instalado y corre solo desde el 5/9/2026 (2.14). Armarle la copia a cada
+familiar queda para después de la semana de prueba (2.32).
 
 ---
 
-# 2. LO QUE TENÉS QUE SABER PARA USARLO
+# 2. LO QUE TENÉS QUE SABER
 
 ## 2.1. Cómo filtra por ubicación
 
@@ -53,2265 +44,448 @@ enseña es el texto libre, que es el descarte que dice algo del puesto (2.9).
 | `city: ["Bahía Blanca", "Punta Alta"]` | **sólo filtra presencial e híbrido**; el remoto entra venga de donde venga |
 | `work_modes: ["remote"]` | sólo remoto, salvo un presencial en tus ciudades, que entra igual |
 
-Las tres reglas que pediste:
-
-1. **El remoto tiene que ser de Argentina.** Un remoto de Buenos Aires o Córdoba
-   para todo el país entra; uno de Colombia o México, que por temas legales sólo
-   contrata allá, no.
-2. **La ciudad no filtra el remoto.** Un remoto de Córdoba se trabaja igual desde
-   Bahía Blanca.
-3. **Un presencial en tus ciudades entra aunque pidas sólo remoto.**
-
-Tu perfil: `country: "Argentina"`, `city: "Bahía Blanca"`. Se edita en la
-pantalla, en *"Ciudades a las que puedo ir en persona"*, separadas por coma.
-
-**Escape hatch**: si algún día querés remoto de cualquier país,
-`"remote_anywhere": true` dentro de `filters.location`. Está apagado.
+- El remoto tiene que ser de Argentina: uno de Colombia o México, que por temas
+  legales contrata sólo allá, no entra.
+- Tu perfil: `country: "Argentina"`, `city: "Bahía Blanca"`. Se edita en Mi perfil.
+- Para aceptar remoto de cualquier país: `"remote_anywhere": true` dentro de
+  `filters.location`. Está apagado.
 
 ## 2.2. Telegram: cada persona su chat
 
-Las claves se comparten (el token del bot, Gemini, TinyFish son de la máquina)
-**pero el chat de Telegram no**. Si dos personas usan la misma computadora y no
-cargás esto, **los dos reciben todo en el mismo teléfono**.
+Las claves son de la máquina, **el chat no**. Sin esto, dos personas en la misma
+compu reciben todo en el mismo teléfono.
 
-Por persona:
-
-1. Que le escriba a su bot de Telegram y le mande cualquier cosa.
-2. Sacá su `chat_id`: abrí `https://api.telegram.org/bot<TOKEN>/getUpdates` y
-   buscá `"chat":{"id":...}`.
-3. Pantalla → elegí su perfil arriba a la derecha → *Mi Telegram* → pegá el
-   número → Guardar.
+1. Que le escriba cualquier cosa a su bot.
+2. Su `chat_id`: `https://api.telegram.org/bot<TOKEN>/getUpdates` → `"chat":{"id":...}`,
+   o @userinfobot (link en Configuración).
+3. Configuración → *Mi Telegram* → pegar → Guardar.
 
 Vacío = usa el `TELEGRAM_CHAT_ID` del `.env`, o sea el tuyo.
 
-## 2.3. Cómo hacer una corrida de prueba
-
-`--dry-run` es el ensayo: **corre todo** (busca en las fuentes, saca duplicados,
-puntúa con el modelo, aplica los filtros), **imprime el resultado por consola**
-y **no manda nada por Telegram ni escribe el historial**.
-
-Abrí PowerShell en la carpeta del proyecto y pegá esto:
+## 2.3. Corrida de prueba
 
 ```
 .venv\Scripts\python.exe -m vacantia.run --profile isaias --dry-run
-```
-
-Vas a ver el detalle por consola. Cuando el resultado te convenza, la de verdad
-es la misma línea sin `--dry-run`:
-
-```
-.venv\Scripts\python.exe -m vacantia.run --profile isaias
-```
-
-O, sin abrir una consola, el botón **Buscar ahora** al pie de la barra lateral de
-la pantalla: hace eso mismo, en un proceso aparte para no congelarla.
-
-**Ojo con una cosa**: `--dry-run` no ahorra plata. Sí gasta llamadas al modelo y
-a TinyFish, porque para saber qué te traería hay que traerlo. Lo único que evita
-es la notificación y ensuciar el historial.
-
-Si querés ver el detalle de por qué descartó cada oferta:
-
-```
 $env:LOG_LEVEL="DEBUG"; .venv\Scripts\python.exe -m vacantia.run --profile isaias --dry-run
 ```
 
-Y todo queda escrito en `vacantia.log` igual, aunque cierres la ventana.
-
-**Cómo salió la primera, el 4/9/2026** (para tener con qué comparar):
-
-```
-careers 17 · google_posts 40 · linkedin 61 · rrhh 7   = 125 recolectadas
-Dedupe:  78 nuevas de 125 (43 por URL repetida, 4 por empresa+título)
-Triaje:  puntúo las 30 más prometedoras, dejo 48 para la próxima
-Filtros: 8 pasaron, 22 descartadas
-         1 de 8 pasó el min_score de 60
-```
-
-Las cuatro fuentes anduvieron. **Ojo con el embudo**, que explica por qué de 125
-salió una sola:
-
-- **`max_new_per_run: 30`** dejó 48 sin puntuar. No se pierden: entran en la
-  corrida siguiente.
-- **20 de las 30 puntuadas se cayeron por inglés**, y la mejor de ésas puntuaba
-  90. Ese es tu cuello de botella, no la cantidad de ofertas.
+Corre todo e imprime el resultado, pero no manda Telegram ni escribe el
+historial. **Sí gasta** llamadas al modelo y a TinyFish. La de verdad es la
+misma línea sin `--dry-run`, o el botón **Buscar ahora** de la barra lateral.
+Todo queda en `vacantia.log`.
 
 ## 2.4. Los mensajes al reclutador
 
-Son los tuyos, los que ya usabas y con los que te contactaron. Están en
-`vacantia/mensajes.py` y salen desde la pantalla, en cada oferta, con el link
-*"Mensaje para escribirle"*.
+Son tus mensajes de siempre (`vacantia/mensajes.py`). El modelo sólo escribe la
+lista de requisitos que tu CV respalda y el nombre limpio del puesto. El cierre
+según el día, tu nombre y *Cómo me presento* los pone el código: un modelo no
+sabe qué día es.
 
-Lo que **escribe el modelo** leyendo el aviso y tu CV: la lista de requisitos
-con ✔️ (los del aviso que tu CV respalda, entre 3 y 6) y el nombre limpio del
-puesto. Tiene prohibido listar algo que el CV no diga, porque eso se cae en la
-primera entrevista y quema el contacto.
+## 2.5. El 403 de Computrabajo
 
-Lo que **decide el código y no el modelo**:
-
-- **El cierre según el día.** Lunes "buen comienzo de semana", martes y
-  miércoles "buen transcurso de semana", jueves y viernes "buen último sprint de
-  la semana". Un modelo no sabe qué día es hoy: lo inventa.
-- **Tu nombre y cómo te presentás**, del perfil.
-- **El nombre de pila de quien publicó**, del aviso.
-
-**Campo nuevo en la pantalla: "Cómo me presento".** Va tal cual en la frase
-*"Mi nombre es Isaías, soy AI Engineer"*. Es aparte del "en una línea, qué hago"
-porque ahí tenías cargado el stack entero y en el mensaje tiene que entrar en
-media frase. Te lo dejé en `AI Engineer`.
-
-## 2.5. El 403 de Computrabajo: arreglado de raíz
-
-**No tenés que hacer nada nunca más.** Se arregló en la pantalla y no vuelve a
-pasar. Una sola vez, para limpiar la que quedó pegada de antes: apretá
-**Ctrl+Shift+Supr** parado en Computrabajo, tildá *Cookies y otros datos de
-sitios*, rango *Última hora*, Borrar. Listo para siempre.
-
-### Qué estaba pasando
-
-La causa era **la pantalla de vacantia**, y era una sola línea de HTML.
-
-Cuando hacías clic en un aviso, el navegador le avisaba a Computrabajo de dónde
-venías: `http://127.0.0.1:8756`, que es la dirección de la pantalla en tu propia
-máquina. Computrabajo guarda esa dirección en una cookie suya, `extrfr` (de
-*external referrer*). Y a partir de ese momento **todos** los pedidos de tu
-navegador al sitio llevaban una dirección a `127.0.0.1` metida adentro de una
-cookie.
-
-Para el firewall de Amazon que Computrabajo tiene delante, eso es la firma
-clásica de un ataque (se llama SSRF: hacer que un servidor le pegue a una
-dirección interna). Entonces cortaba: `403 Forbidden` en el sitio **entero**,
-desde tu navegador, hasta que se borrara la cookie.
-
-Por eso te pasaba **cada** vez, y por eso te pasaba **justo con los que venían de
-la app**: no era un aviso fallando: era el primer clic desde la pantalla el que
-rompía todos los siguientes.
-
-Verificado el 7/9/2026 armando la cookie a mano y pidiendo el mismo aviso:
-
-| Cookie que se manda | Respuesta |
-|---|---|
-| `extrfr=http://127.0.0.1:8756/trabajos` | ❌ **403** |
-| `extrfr=http://localhost:8756/trabajos` | ❌ **403** |
-| la misma escapada (`http%3A%2F%2F127.0.0.1...`) | ❌ **403** — tampoco zafa |
-| `extrfr=https://ejemplo.com/x` | ✅ 200 — un referrer normal no molesta |
-| `extrfr=127.0.0.1:8756/trabajos` (sin el `http://`) | ✅ 200 — sin el esquema no dispara |
-| sin la cookie | ✅ 200 |
-
-### Qué se cambió
-
-Los links a los avisos ahora salen con `rel="noreferrer"`: la pantalla **no le
-cuenta al portal de dónde venís**. Sin eso, Computrabajo no tiene qué guardar, la
-cookie `extrfr` no se crea, y el firewall no tiene nada que marcar.
-
-Probado después del cambio: abrí los avisos uno atrás de otro desde la pantalla,
-todos cargaron, y la cookie `extrfr` **no llegó a existir ni una vez**.
-
-No se pierde nada a cambio: ese dato sólo le servía al portal para estadísticas.
-Seguís entrando igual, logueado igual, y podés postularte igual.
-
-### Dos correcciones que te debo
-
-Diagnostiqué esto mal dos veces antes de dar con la buena:
-
-- **El 5/9** dije que Computrabajo le contestaba 403 a cualquier navegador y que
-  no había nada que hacer. Sobre esa conclusión se apagó la fuente y se sacaron
-  17 avisos de tu historial.
-- **Hoy más temprano** dije que lo rompía una ráfaga de pedidos y que sólo se
-  arreglaba borrando la cookie a mano cada vez. También estaba mal: la ráfaga era
-  una casualidad, la había disparado yo abriendo la app desde localhost.
-
-Esta tercera es la buena, y se distingue de las otras dos en que **se puede
-reproducir a voluntad**: pongo la cookie con `127.0.0.1` adentro y da 403, la
-saco y da 200, las veces que quiera.
+Lo causaba la pantalla: el referrer `http://127.0.0.1:8756` terminaba en la
+cookie `extrfr` y el firewall de Computrabajo lo leía como un ataque. Los links
+salen con `rel="noreferrer"` y no vuelve a pasar. **No sacar ese
+`noreferrer`.** Si igual aparece, se borran las cookies de Computrabajo de la
+última hora.
 
 ## 2.6. Si un portal deja de traer nada
 
-Los portales cambian sus direcciones sin avisar. Se arregla sin programar, en
-`profiles/isaias.json`, en el bloque de esa fuente:
+Síntoma: `0 aviso(s)` en `vacantia.log`. Los portales cambian las direcciones.
+En el perfil, bloque de esa fuente:
 
 ```jsonc
-{
-  "type": "bumeran",
-  "enabled": true,
-  "search_url": "PEGAR una búsqueda real, con {query} donde va el puesto",
-  "job_url_pattern": "un pedazo común a las direcciones de aviso, ej: /empleos/"
-}
+{ "type": "bumeran", "enabled": true,
+  "search_url": "una búsqueda real, con {query} donde va el puesto",
+  "job_url_pattern": "un pedazo común a las direcciones de aviso, ej: /empleos/" }
 ```
 
-Buscá algo a mano en el portal, copiá la dirección de la barra del navegador y
-reemplazá el término buscado por `{query}`. Abrí dos o tres avisos y mirá qué
-tienen en común sus direcciones: eso va en `job_url_pattern`.
-
-El síntoma es `0 aviso(s)` en `vacantia.log`.
-
-## 2.7. LinkedIn: cómo se lo esquiva
-
-Probado el 4/9/2026 contra un perfil real:
-
-| | |
-|---|---|
-| Post suelto (`/posts/...`) | ✅ se lee |
-| Búsqueda de LinkedIn Jobs | ✅ se lee |
-| **Perfil de persona** (`/in/...`) | ❌ **vacío**, y `HTTP 999` desde tu IP |
-| Página de empresa (`/company/...`) | ❌ vacío |
-
-**El perfil de una persona no se puede leer**, y no hay forma de arreglarlo sin
-poner usuario y contraseña, que es lo que haría que te bloqueen la cuenta.
-
-**Pero se lo esquiva y ya está hecho.** Cuando cargás un perfil de LinkedIn en
-*Mi perfil*, el sistema no entra al perfil: le pregunta a Google cuáles son las
-publicaciones de esa persona y lee ésas, que sí se pueden leer. Vos pegás el
-perfil y funciona; el rodeo es invisible.
-
-Filtra por el identificador del perfil, no por el nombre: buscando "Renzo Bazan"
-aparecían otras dos personas que se llaman igual.
-
-Cuesta **una búsqueda por reclutador y por corrida**. Se apaga con
-`"buscar_posts": false` en el bloque `rrhh` del perfil.
-
-**Ojo, no confundir**: la fuente `google_posts` **también** trae publicaciones de
-LinkedIn, pero busca por puesto ("AI Engineer" y señales de que contratan), de
-cualquiera. Esto otro busca por persona, la que vos elegiste seguir. Son
-complementarias.
-
-## 2.8. Las publicaciones viejas: una sola perilla, y las nuevas arriba
-
-Tenías razón, y era peor de lo que sonaba. Medido sobre tu historial el
-7/9/2026, con 216 avisos:
-
-| Fuente | Total | Con fecha | **Sin fecha** |
-|---|---:|---:|---:|
-| linkedin | 114 | 85 | 29 |
-| google_posts | 75 | 36 | 39 |
-| **computrabajo** | 8 | **0** | **8** |
-| **bumeran** | 9 | **0** | **9** |
-| **zonajobs** | 3 | **0** | **3** |
-| careers | 5 | 0 | 5 |
-| rrhh | 2 | 0 | 2 |
-
-Había posts de **2020, 2023 y 2024** mezclados con los de esta semana. Y **los
-tres portales no reportaban fecha nunca**, ni una sola vez.
-
-### Lo peor: el filtro que ya tenías estaba ciego
-
-La pantalla ya tenía el filtro de antigüedad (Hoy / 7 días / 30 días). Y como un
-aviso sin fecha no se descarta —que es la regla correcta: lo que no dice, no
-filtra— **un aviso de Bumeran de dos meses te pasaba el filtro de "hoy"**,
-porque no tenía fecha con qué compararse. El filtro andaba; le faltaba el dato.
-
-Y no es que los portales no la tengan. Está escrita en la misma página que ya
-bajábamos:
-
-- Computrabajo: `Hace 6 días (actualizada)`
-- Bumeran y Zonajobs: `Publicado el 20/08/2026`
-
-La estábamos tirando a la basura.
-
-### Lo que se cambió
-
-**1. Ahora se lee la fecha de los tres portales.** Con una trampa que había que
-esquivar: al pie de cada aviso el portal lista ocho *ofertas similares*, cada una
-con **su** fecha. Agarrar la primera del documento daba la de otro aviso —uno
-"Ayer" cuando el tuyo tenía 6 días—. Se corta el texto donde empiezan los avisos
-ajenos y recién ahí se busca.
-
-De paso, Bumeran y Zonajobs dicen la fecha dos veces y no valen lo mismo: arriba
-`Publicado hace más de 15 días` (que deja de contar a los 15: puede ser 16 días o
-dos años) y más abajo la exacta. Se usa la exacta.
-
-**2. Una sola perilla, y es tuya, no de cada fuente.** En *Mi perfil* hay un
-campo nuevo:
-
-> **No traerme avisos de más de ___ días**
-
-Ese número lo heredan **todas** las fuentes: los tres portales, LinkedIn, las
-publicaciones por buscador y los reclutadores que seguís. Antes estaba repartido
-en seis bloques del archivo y se desincronizaban sin que nadie se enterara.
-
-- **Tu perfil: 7 días.** Para AI Engineer, a la semana la búsqueda ya está
-  cubierta de postulantes.
-- **El de tu papá: 30 días.** Seguridad e higiene en el campo es otro mercado: la
-  búsqueda queda abierta, se postulan dos o tres y no quedan. *Este número lo
-  puse yo; si querés 45, cambialo en Mi perfil y listo.*
-
-`0` apaga el límite y vuelven a entrar los de 2020.
-
-**Un aviso que no dice cuándo se publicó entra igual.** No se descarta por no
-saber, que es lo que pediste y además es la regla de todo el proyecto.
-
-**3. Las recién publicadas van arriba de todo.** Ésta es la parte que contesta lo
-que vos decías —*"cuanto más reciente, más chance de que nos llamen"*—, y no es
-un filtro sino un orden.
-
-Antes la lista ordenaba sólo por puntaje. Pero "cuál encaja mejor con mi CV" no
-es la misma pregunta que **"a cuál me conviene postularme ahora"**: una de 92
-puntos de hace seis días ya tiene cien postulantes, y una de 88 de esta mañana no
-tiene ninguno. Entre esas dos, la segunda.
-
-Ahora la lista abre con una banda:
-
-> **RECIÉN PUBLICADAS · 5** — Avisos de hoy o ayer. Son a los que menos gente se
-> postuló todavía.
->
-> **EL RESTO** — Ordenadas por puntaje, como siempre.
-
-⚠️ **El puntaje que ves no se toca.** Sigue significando qué tan bien encaja con
-tu CV; mezclarle la fecha lo arruinaría. Lo único que cambia es el orden.
-
-Y hay dos cosas que **no** suben a la banda, a propósito:
-
-- **Las que no llegan a tu puntaje mínimo** (60). Ser de hoy no vuelve buena a
-  una oferta mala. Esto ya te había pasado antes con otra cosa: tres avisos de
-  Lima puntuados 0 encabezaban la lista por haber entrado hoy. No se repite.
-- **Las que no tienen fecha.** No sabemos que sean nuevas y ponerlas arriba sería
-  inventarlo.
-
-### Por qué la ventana es de 7 días y no de 1
-
-Suena a que apretando a 1 día conseguís sólo lo del día, que es lo que querés.
-No: se rompe. El buscador **tarda en indexar**, y un post de ayer puede aparecer
-recién pasado mañana. Con la ventana en 1 día ese post queda afuera **para
-siempre**, porque para cuando aparezca ya no entra. Perderías justo los que
-buscás.
-
-Medido con la misma búsqueda: **7 días devolvió 10 publicaciones, 1 día devolvió
-2.**
-
-Por eso las dos cosas están separadas y hacen trabajos distintos: **la ventana es
-el colador de basura** (generosa, para no perder nada por la demora del índice) y
-**la banda es la prioridad** (agresiva, lo de hoy primero).
-
-## 2.9. Descartar sin escribir, y por qué tu lista bajó de 41 a 10
-
-Medido sobre tu historial el 8/9/2026, con 107 ofertas y 60 descartes tuyos.
-
-### Estabas haciendo a mano lo que el sistema ya había hecho
-
-De las **41 que te esperaban sin marcar, 31 el filtro ya las había rechazado**:
-
-| | Descartaste (60) | Te esperaban (41) |
-|---|---:|---:|
-| El filtro ya las había tirado por **idioma** | 38 | 20 |
-| ...por **lugar o modalidad** | 11 | 11 |
-| El filtro **sí las aceptaba** (decisión tuya de verdad) | 11 | 10 |
-
-El motor guarda en el historial **todo lo que puntúa**, incluso lo que después
-descartó. Eso está bien para poder contar lo que se pierde por inglés, pero la
-pantalla lo mostraba todo junto, y por eso escribiste 46 veces "estaba en
-inglés": eran avisos sobre los que el sistema ya había decidido.
-
-**Ahora no llegan a *Sin marcar*.** No se borra nada, se cuentan en *Métricas*, y
-**vuelven solas si cambiás el filtro que las sacó** — el día que subas tu nivel
-de inglés en *Mi perfil*, esas 20 reaparecen sin que nadie corra nada. Por eso se
-calcula al mirar la lista y no se guarda una marca: una marca guardada congelaría
-la decisión que se tomó con la configuración de aquel día.
-
-Tu lista pasó de **41 a 10**.
-
-### El motivo ahora se elige de una lista
-
-### Dos caminos, y con cualquiera alcanza
-
-Debajo de los botones quedaron las dos cosas, **las dos siempre a la vista**:
-
-1. **Un desplegable** con los tres motivos que se repiten.
-2. **Un campo de texto, opcional**, para todo lo demás.
-
-Los tres del desplegable salen de lo que de verdad escribiste, no de lo que yo
-imaginé:
-
-| | Lo habías escrito |
-|---|---:|
-| **Piden inglés** | 46 veces, en 4 redacciones distintas |
-| **Es presencial y no puedo ir** | 4 |
-| **Caso especial (que no aprenda de esto)** | 6 (era tu guion) |
-
-**"Piden inglés" suma al contador**, como pediste: el cartel de arriba pasó de 72
-a 76 apenas se contaron los que ya habías marcado a mano. Sube cada vez que
-marcás una así, y baja solo si subís tu nivel en *Mi perfil*.
-
-⚠️ **No hay una opción "Otro motivo" en la lista, y es a propósito.** La primera
-versión la tenía y estaba mal: para escribir un motivo había que abrir el
-desplegable, bajar hasta *Otro* y recién ahí aparecía el campo. Tres pasos de más
-justo en el caso en que ya tenías la mano en el teclado, y multiplicado por las
-veces que pasa. Ahora el campo está siempre ahí: si el motivo es uno de los tres,
-lo elegís; si no, escribís y listo. Podés usar los dos a la vez si querés, y en
-la tarjeta se muestran los dos.
-
-⚠️ **Una cosa que hay que aclarar**: el guion lo venías usando para que el
-sistema no aprendiera de ese descarte. **Todavía no aprende de ninguno.** Los
-motivos se guardan y se cuentan, pero el scoring no los lee: el ciclo de
-aprendizaje está descrito en el código y no implementado. Tu instinto de separar
-los casos era correcto y ahora queda registrado como corresponde, pero por ahora
-no cambia nada del puntaje. Si querés que aprenda de verdad, es otro trabajo.
-
-## 2.10. La pestaña Métricas, y el número grande
-
-Los contadores estaban repartidos en los cinco botones de arriba (*Sin marcar*,
-*Apliqué*, *Descarté*, *Archivadas*, *Todas*), todos del mismo tamaño. Pero
-mientras revisás ofertas hay **un solo número que importa: cuántas te faltan**.
-"Archivadas 83" no es una tarea, es un archivo, y ocupaba el mismo lugar.
-
-Ahora:
-
-- **Sin marcar es un número grande** arriba a la izquierda, y a la derecha, en la
-  misma línea, el filtro de antigüedad.
-- **La antigüedad es un desplegable** en vez de cuatro botones: se toca una vez
-  por semana y ocupaba una fila entera.
-- **Todo lo demás vive en la pestaña Métricas**: los totales, qué descartó el
-  sistema y por qué, por qué descartaste vos, y de qué fuente viene cada oferta.
-
-## 2.11. Volver a donde estabas después de marcar
-
-Lo que contaste: bajabas hasta una oferta de 20 puntos, la marcabas, y la página
-volvía arriba de todo.
-
-Es porque marcar es un POST que redirige a un GET —si no, recargar reenviaría el
-formulario— y el navegador abre esa página nueva desde arriba. Ahora se guarda
-dónde estabas justo antes de enviar y se vuelve ahí al llegar.
-
-Un detalle que me comí y vale la pena dejar escrito: `form.submit()` **no dispara
-el evento `submit`**, así que enganchar el guardado al evento no alcanzaba y la
-primera versión seguía saltando arriba. Hay un test que lo fija.
-
-## 2.12. Los desplegables, y el nombre que lleva al home
-
-Dos cosas chicas de la pantalla.
-
-**Los cuatro desplegables ahora se ven como el resto.** Había un problema real:
-de los cuatro (el de perfil arriba, el de antigüedad, el de motivos y el de nivel
-de inglés), **tres no tenían una sola línea de CSS**. Salía el control crudo de
-Windows, que no se parece a nada del resto de la pantalla. El cuarto heredaba el
-borde pero conservaba la flecha nativa del sistema.
-
-Ahora los cuatro tienen el mismo alto, el mismo borde, el mismo radio y el mismo
-fondo que los botones y los campos de texto, más lo que les faltaba y los botones
-sí tenían: **hover, hundidito al apretar y transición**.
-
-La flecha la dibujamos nosotros —la nativa es la única parte que el navegador no
-deja pintar— y es un token más de la paleta, así que cambia sola en modo oscuro.
-Hay un test que falla si alguien toca el gris de la paleta y se olvida de la
-flecha.
-
-La lista que se despliega al hacer clic **la dibuja Windows, no el navegador**.
-Lo único que la hace acompañar el tema oscuro es `color-scheme`, que ya estaba.
-
-**El nombre VACANTIA lleva al home.** Era lo primero que uno intenta. Se pinta
-como el texto de al lado y no como un link, para no competir con la navegación.
+Si trae avisos pero sin empresa, o con títulos tipo *Oferta De Trabajo De ...*,
+el portal cambió la página del aviso y el lector no la entiende (pasó con
+Computrabajo, 2.40).
+
+## 2.7. LinkedIn
+
+- Se leen los posts sueltos y la búsqueda de Jobs. **El perfil de una persona no**
+  (`HTTP 999`), y no se arregla sin usuario y contraseña, que es lo que haría que
+  te bloqueen la cuenta.
+- Para seguir a un reclutador se le pregunta a Google por sus publicaciones. Se
+  filtra por el identificador del perfil y no por el nombre. Cuesta una búsqueda
+  por reclutador y por corrida; se apaga con `"buscar_posts": false` en `rrhh`.
+- `google_posts` es otra cosa: busca por puesto, de cualquiera.
+
+## 2.8. Antigüedad de los avisos
+
+- **Una sola perilla** en Configuración, *No traerme avisos de más de N días*, y
+  la heredan todas las fuentes. Vos 7, papá 30. `0` la apaga.
+- **Un aviso sin fecha entra igual:** lo que no se sabe no filtra.
+- **Las recién publicadas van arriba**, en una banda aparte. El puntaje no se
+  toca, sólo el orden. No suben las de menos de tu puntaje mínimo ni las que no
+  tienen fecha.
+- **No bajar la ventana a 1 día:** Google tarda en indexar, y un post de ayer que
+  aparece pasado mañana quedaría afuera para siempre. Con 7 días volvían 10
+  publicaciones; con 1 día, 2.
+
+## 2.9. Descartar
+
+- Lo que el filtro ya sacó no llega a *Sin marcar*: va a *Filtradas* (2.21) y
+  vuelve solo si cambiás el filtro. Se calcula al mirar, no se guarda una marca.
+- El motivo se elige de una lista **o** se escribe; con cualquiera alcanza. **No
+  hay opción "Otro"** a propósito: agregaba tres pasos justo cuando ya ibas a
+  escribir.
+- Los motivos viven en `vacantia/motivos.py`. *Inglés*, *presencial* y *caso
+  especial* no le enseñan nada al modelo; los otros tres sí (2.41).
+
+## 2.10 a 2.12. Pantalla: detalles chicos
+
+- *Sin marcar* es el número grande; todo lo demás vive en Métricas.
+- Después de marcar vuelve a donde estabas. `form.submit()` no dispara `submit`,
+  y hay un test que lo fija.
+- Los desplegables usan los tokens del sistema y la flecha es un token más.
 
 ## 2.13. La cuenta de Gemini
 
-Si un día el log dice que fallaron los modelos, son dos causas distintas:
+Si el log dice que fallaron los modelos:
 
-- **`404 no longer available`**: Google dio de baja ese modelo. Los vigentes
-  salen de `https://generativelanguage.googleapis.com/v1beta/models?key=TU_KEY`
-  y se cambian en el perfil, en `llm.model` y `llm.fallback_models`.
-- **`429 prepayment credits are depleted`**: la cuenta se quedó sin saldo. No es
-  el límite diario. Se arregla en <https://ai.studio/projects>.
+- **`404 no longer available`:** Google dio de baja ese modelo. Los vigentes se
+  ven en `https://generativelanguage.googleapis.com/v1beta/models?key=TU_KEY` y
+  se cambian en `llm.model` / `llm.fallback_models`.
+- **`429 prepayment credits are depleted`:** sin saldo. Se arregla en <https://ai.studio/projects>.
+- **Plan B:** `provider: "openrouter"` en el perfil (50 llamadas por día).
+- **Sin modelo cae a una heurística** que cuenta palabras del título. Esos
+  puntajes no significan nada; el log dice `[heurística, sin LLM]`.
 
-**Plan B probado**: tu key de OpenRouter funciona. Se cambia poniendo
-`provider: "openrouter"` en el perfil. Techo de 50 llamadas por día, que alcanza
-para una corrida diaria.
+## 2.14. Qué hace `instalar.bat`
 
-Cuando el LLM se cae, el sistema no se rompe: cae a una heurística que sólo
-cuenta keywords en el título. **Los puntajes de esas corridas no significan
-nada** y se reconocen porque salen todos apelotonados y el log dice
-`[heurística, sin LLM]`.
-
-## 2.14. Qué pasa cuando corrés `instalar.bat`
-
-**No queda ningún proceso corriendo, y no tenés que prender nada a mano.**
-
-`instalar.bat` registra una **tarea programada de Windows** por perfil, llamada
-`Vacantia - <nombre>`. Windows la despierta sola, ella busca, avisa por Telegram
-y se cierra. Entre corrida y corrida no hay nada en memoria.
-
-Se despierta:
-
-- **Cuando iniciás sesión en Windows**, con 3 minutos de retraso (13 para el
-  segundo perfil, para que no arranquen juntos).
-- **En sus tres horarios del día.** Con un solo perfil son 12:00, 16:30 y 23:59.
-
-Prendés la compu y a los 3 minutos ya está trabajando. **No es como tu otro
-proyecto**: ahí hay que levantar el proceso a mano; acá no.
-
-Tres detalles que están resueltos y conviene saber:
-
-- **Si la compu estaba apagada a las 12:00**, la corrida no se pierde: se ejecuta
-  cuando la prendés (`StartWhenAvailable`).
-- **No abre ventana negra.** Usa `pythonw.exe`. El log igual se escribe en
-  `vacantia.log`, así que no se pierde nada.
-- **No se pisan entre sí**: si una corrida todavía no terminó, la siguiente se
-  saltea en vez de encimarse.
-
-Para ver si está programada, cuándo corrió y cómo le fue: **Métricas**, abajo de
-todo, *Cómo viene funcionando*. Para que deje de correr: `desinstalar.bat`.
+Registra una tarea de Windows por perfil, `Vacantia - <nombre>`. No queda
+ningún proceso corriendo. Se despierta al iniciar sesión (3 minutos después; 13
+para el segundo perfil) y en tres horarios por día (12:00, 16:30 y 23:59 con un
+solo perfil). Si la compu estaba apagada, corre al prenderla. No abre ventana
+(`pythonw.exe`) y no se encima con otra corrida. Cómo le viene yendo: Métricas →
+*Cómo viene funcionando*. Para que deje de correr: `desinstalar.bat`.
 
 ## 2.15. AI Engineer no es Machine Learning
 
-Es la distinción que más plata cuesta si se confunde, y estaba mal cargada.
+Conectás modelos ya entrenados a producto; **no entrenás modelos**. Eso tiene
+que estar dicho en tres lugares: el CV, los términos de búsqueda y
+`not_suitable`. Si falta en uno, se cuelan ofertas de ML con 90 puntos.
+
+## 2.16. Puestos que no querés ni pagar por puntuar
+
+*Puestos que NO quiero*, en Mi perfil: si el **título** tiene uno de esos
+términos, se descarta sin llamar al modelo. Sobre tus datos, eso ahorra el 28%
+de las llamadas.
+
+- **Nunca mira la descripción:** un AI Engineer nombra "machine learning" todo el tiempo.
+- **Antes de puntuar sólo se filtra por título y por país.** Un híbrido en Bahía
+  Blanca tiene que entrar, y la ciudad la completa el modelo.
+
+## 2.17. Archivar
+
+*Archivar* (antes *Ya no está*, 2.43) es "no le doy bola a esta oferta", por la
+razón que sea: muy vieja, no era una oferta, o lo que fuere. Es un estado
+aparte, no un descarte: no lleva motivo, y como descarte le enseñaría al modelo
+una preferencia que no dijiste. Se deshace desde *Archivadas*. El atajo por antigüedad no archiva las
+que no tienen fecha ni las que ya marcaste.
+
+## 2.18 y 2.19. La pantalla, rearmada
+
+- Todo sale de los tokens de `vacantia/ui/css/tokens.css`. Hay tests que fallan
+  si una regla escribe un color suelto o si un par de texto y fondo baja de 4.5:1.
+- Un solo tema, el oscuro.
+- *Buscar ahora* corre en un proceso aparte, sin ventana, y no deja arrancar dos.
+- `buscar_ahora.bat` y `estado.bat` ya no existen: son un botón y una sección de Métricas.
+
+## 2.20, 2.24 y 2.31. LinkedIn URLs
+
+La app arma la dirección y vos la abrís. Es la única forma de llegar a los
+posteos del día, porque Google los indexa uno a tres días tarde. Los puestos
+tildables son tus palabras clave, las mismas que usa el buscador automático.
+
+Lo probado contra LinkedIn, que es el mapa si algún día deja de andar:
+
+- **`NOT (a OR b)` devuelve cero:** se emite un NOT por término.
+- **Publicaciones tiene un tope de unas 110 letras.** Arriba de eso devuelve cero
+  sin avisar. Cuando se recorta, la pantalla lo dice. En Jobs no hay tope.
+- **`contentType=["jobs"]` deja la lista en cero:** no usarlo.
+- **Jobs:** `geoId=100446943` es Argentina, `f_WT` la modalidad, `f_E=4`
+  Mid-Senior, `f_TPR` la antigüedad. El link 1 de
+  `estrategia-links-linkedin-pestana-jobs.md` sale igual, con un test.
+- **LinkedIn avisó que retira la búsqueda clásica** desde septiembre. Si los links
+  dejan de filtrar, hay que rehacer los filtros en `vacantia/ui/linkedin_urls.py`.
+- **El anotador:** + y − anotan, *Confirmar* suma al contador grande. Un
+  *Confirmar* todavía no se puede deshacer.
+
+## 2.21 y 2.25. La pestaña Filtradas
+
+Ahí cae lo que el filtro saca solo, con el motivo, para auditarlo:
+
+- *Bien descartada*
+- *Mal descartada*: vuelve a Sin marcar.
+- *Bien, motivo equivocado*
+
+Muestra sólo las de 50 puntos para arriba; la meta son 40 revisadas. Vive en
+`revision_filtro` y no toca `aplicado`. Se muestran **todos** los motivos, con
+el idioma primero, porque el lugar lo deduce el modelo y ahí aparecen los errores.
+
+## 2.22. Indeed y Get on Board
+
+- **Get on Board:** API pública, sin token y sin TinyFish. Sigue trayendo aunque
+  falte la clave de TinyFish. Se pide `country_code=AR`, y "Remote" en
+  `countries` se lee como modalidad, no como país.
+- **Indeed:** Cloudflare deja leer más o menos la mitad de los avisos, siempre
+  los mismos, así que el techo son unos 11 por corrida. No se puede paginar,
+  porque pide cuenta. Rinde buscar por más términos (`max_queries: 4`, rotando).
+  Se guarda `viewjob?jk=<id>` y no el link con token, que cambia en cada corrida.
+
+## 2.23, 2.27 y 2.35 a 2.38. Métricas
+
+- **Contador de postulaciones** con reparto por semana. Las semanas en cero se
+  dibujan en gris.
+- **Gráficos hechos con HTML y tokens**, sin librería. Con menos de tres filas va
+  una tabla en lugar de un gráfico.
+- **Qué te están pidiendo** sale del campo `stack` que el modelo ya devolvía. No
+  hay ninguna lista de tecnologías en el código, a propósito: tiene que servir
+  para cualquier oficio.
+- **Cada bloque dice contra cuántas se mide**, con el número grande de la
+  cabecera (`_cabecera` en `render.py`). Si agregás un bloque, pasale el total.
+- **Las tarjetas de arriba suman el total**, y la cuenta escrita aparece sólo si cierra.
+- **Lo escrito a mano** se agrupa sin mirar mayúsculas ni tildes, y no se
+  interpreta más que eso: cuando una idea se repite, va al desplegable.
+- **Verde es lo que ya hiciste, nunca decoración.** El rojo, sólo para lo que
+  está mal de verdad.
+
+## 2.26 y 2.39. CSS, htmx y el panel de búsqueda
+
+- El CSS está en `vacantia/ui/css/` y el JS en `static/app.js`. Se leen del disco
+  en cada pedido, así que alcanza con F5.
+- htmx está vendorizado; nunca desde un CDN.
+- **Un solo pedido cada 2 segundos** actualiza el cartel del pie, el panel
+  *Buscando trabajo* y el aviso de ofertas nuevas (`hx-swap-oob`). Si hace falta
+  un cuarto lugar, se cuelga de ahí y no de otro reloj.
+- **La barra no inventa porcentajes:** sólo se llena durante el puntaje, que es
+  cuando se sabe el total. Las etapas salen de `corrida.ETAPAS`.
+- **Nunca recarga sola:** avisa, y decidís vos.
+
+## 2.28. Por qué no hay más ofertas
 
-**Lo que hacés**: conectás modelos ya entrenados (OpenAI, LLMs open source) a un
-producto. RAG, function calling, prompt engineering, agentes, APIs.
+Al 12/9/2026, 163 de 220 ofertas se caían por inglés, el 74%. Es el único filtro
+que mueve la aguja: aceptar avisos en inglés deja 90 para revisar hoy, 12 de
+ellas con 60 o más. La casilla es *Aceptar avisos en inglés* en Mi perfil.
+**No la toqué**: es tu decisión.
 
-**Lo que NO hacés**: entrenar modelos, fine-tuning, armar redes neuronales.
+**Apify no:** pide tarjeta para cada persona, cobra por resultado y no resuelve
+lo del inglés. Vale la pena mirarlo recién si prendés el inglés y te quedás
+igual sin ofertas.
 
-Estaba mal en tres lugares a la vez, y por eso se colaba:
+## 2.29. Más de un CV
 
-1. **Tu CV decía "Entrené un modelo de IA"** para el chatbot regulatorio, cuando
-   en la misma línea el stack dice `RAG, LangChain, Chroma`, que es lo contrario.
-   Corregido: *"Construí un sistema RAG sobre documentación regulatoria..."*.
-2. **Las fuentes buscaban `Machine Learning Engineer`, `Data Scientist` y
-   `MLOps`.** Por eso te llegaban. Ahora buscan AI Engineer, LLM Engineer,
-   GenAI Engineer, AI Agent Engineer, Backend Python y Prompt Engineer.
-3. **`not_suitable` no lo decía.** Ahora lo dice con todas las letras, y es lo
-   que lee el que puntúa.
+Cada CV tiene sus palabras de búsqueda, que se suman en todas las fuentes. La
+oferta se puntúa contra el CV que mejor encaja y la tarjeta dice cuál mandar.
+Decisiones que no conviene deshacer:
 
-**El efecto, medido sobre la misma oferta**: pasó de **90 a 0**, con la razón
-*"El candidato no hace Machine Learning ni entrena modelos, y el puesto es de
-Machine Learning Engineer"*.
+- **Con un solo CV, el prompt sale byte a byte igual.** Hay un test.
+- **Un CV vacío no cuenta.** Se guarda el **id**, no el nombre.
+- **Enter guarda y no agrega un CV:** hay un botón de guardar invisible al
+  principio del formulario. No sacarlo.
+- **Con varios CV, el "qué hago" del perfil no va al modelo:** sesgaba el puntaje
+  hacia uno de los CV.
 
-⚠️ **Las 207 ofertas que ya tenés guardadas conservan su puntaje viejo.** Se
-puntuaron con el perfil equivocado. Sólo las corridas nuevas salen bien.
+Pendiente natural: registrar qué CV mandaste al marcar *Apliqué*.
 
-## 2.16. Los puestos que no querés ni pagar por puntuar
+## 2.30. Empresas por perfil
 
-Los filtros de ubicación corren **después** del scoring, porque el país y la
-ciudad los saca el modelo leyendo el aviso. Eso significaba pagar por puntuar un
-Data Steward de Lima para tirarlo después.
-
-Sobre tus 267: **86 traían en el título un puesto que no hacés**, y 34 de ésos
-igual pasaron el min_score y te llegaron por Telegram.
-
-**Campo nuevo en la pantalla: "Puestos que NO quiero"**, en *Qué busco*. Si el
-título del aviso dice alguno de esos términos, se descarta **sin gastar una
-llamada al modelo**. Te lo dejé cargado con 17:
-
-```
-Machine Learning, MLOps, Data Scientist, Data Science, Data Steward,
-Data Engineer, Data Governance, Data Analyst, Custodio, Deep Learning,
-Computer Vision, Quality Assurance, QA Automation, Power BI, Big Data,
-Científico de Datos, Analista de Datos
-```
-
-**Agregá los que veas.** Cada término que sumás es plata que no se gasta.
-
-Dos decisiones que conviene conocer:
-
-1. **Mira sólo el TÍTULO, nunca la descripción.** Un aviso de AI Engineer
-   nombra "machine learning" entre las tecnologías del equipo todo el tiempo, y
-   descartarlo por eso sería tirar una oferta buena.
-2. **Antes de puntuar sólo se filtra por título y por país**, aunque el sistema
-   sepa filtrar por modalidad. Un híbrido en Bahía Blanca tiene que entrar
-   aunque pidas sólo remoto, y para saber que es en Bahía Blanca hace falta la
-   ciudad, que la completa el modelo. Descartar por modalidad antes de tener la
-   ciudad tiraría justo ésas.
-
-Medido sobre tus datos, con sólo lo que la fuente sabe antes de puntuar:
-**75 de 267 se van sin pagar**, un 28% de las llamadas.
-
-**El historial viejo ya se limpió** (5/9/2026). Tenía 267 ofertas puntuadas con
-el perfil de antes: quedaron **147**. Se fueron 86 por título y 34 por ubicación.
-
-Lo que **no** se tocó, a propósito:
-
-- **Las 75 que piden inglés.** Son las del cartel, y el cartel está para que
-  moleste. Borrarlas sería taparte el número.
-- **Las que marques con verde o rojo.** Ese feedback no se puede recuperar.
-- **`seen_jobs.json`**, que es la lista de lo ya visto. Las borradas siguen
-  marcadas como vistas, así que no vuelven a entrar ni a costar plata.
-
-El backup quedó en `state/isaias/job_history.bak-20260905-004107.json`. Si algún
-día agregás términos a "Puestos que NO quiero" y querés volver a limpiar,
-avisame y corro lo mismo.
-
-## 2.17. Archivar: el aviso ya no está
-
-Los avisos de más de una semana suelen estar cubiertos, o directamente los
-bajaron. Pero **descartarlos sería mentirle al sistema**: el motivo de un
-descarte va al prompt de scoring como ejemplo negativo, y "el aviso ya no está"
-no dice nada de si el puesto te servía. Le enseñarías una preferencia que nunca
-tuviste.
-
-Por eso archivar es un estado aparte:
-
-- **Botón "Ya no está"** en cada oferta. No pide motivo, no toca el veredicto.
-- **Pestaña "Archivadas"**, con un botón para devolverlas a la lista.
-- **Atajo arriba de la lista**: *Más de 7 días (43) · Más de 14 días (23) · Más
-  de 30 días (14)*. Dice cuántas son antes de que aprietes.
-
-**No vuelven a entrar en las corridas siguientes**, y no es por archivarlas: su
-clave ya está en `seen_jobs.json` desde la primera vez que se guardaron, y el
-dedupe las saca antes de gastar nada. Por eso archivar no borra nada y se puede
-deshacer.
-
-Dos cosas que **no** archiva el atajo:
-
-- **Las que no dicen cuándo se publicaron.** No se sabe si están viejas, y
-  archivar por las dudas es tirar una oferta que puede ser de ayer.
-- **Las que ya marcaste.** Ésas ya las decidiste.
-
----
-
-## 2.18. El rediseño: qué cambió de lugar
-
-La pantalla se rehizo entera contra `DESIGN.md`. La lógica no se tocó: lo que
-cambió es qué se ve, en qué orden y con qué peso. Lo que vas a notar el primer
-día:
-
-**La navegación pasó de arriba a la izquierda.** Una barra lateral fija, con el
-perfil arriba y los cuatro destinos agrupados por lo que hacés: *Buscar* con
-Trabajos; abajo, separado, *Métricas* y *Mi perfil*. Se llamaban *Métricas* y
-*Mi perfil*: mismo lugar, nombre nuevo. Las direcciones (`/estadisticas`,
-`/datos`) no cambiaron, así que un favorito viejo sigue andando.
-
-**Abajo de todo, fijo, el estado del sistema:** *Última búsqueda: hoy 16:30 ·
-Próxima: hoy 23:59* y la ventana de días que cubre. Está en todas las pantallas.
-La razón es concreta: la pregunta que más pesa buscando trabajo no es "¿hay
-ofertas?" sino "¿esto es todo lo que hay?", y esto la contesta sin que tengas
-que abrir un archivo. Es texto quieto: no parpadea, no cuenta hacia atrás y no
-se actualiza solo.
-
-**La tarjeta de oferta muestra dos controles, no seis.** Antes se veían al mismo
-tiempo *Apliqué*, *No apliqué*, el desplegable de motivos, el campo de texto y
-*Ya no está*. Ahora:
-
-- **Apliqué**, en índigo, que es la acción que venís a hacer.
-- **No apliqué**, al lado, más callado. Al tocarlo se abre el bloque del motivo
-  **adentro de la misma tarjeta**: el desplegable, el campo y el botón de
-  confirmar. Sigue alcanzando con cualquiera de los dos, como antes.
-- **Un menú de tres puntos** en la esquina, con *Mensaje para escribirle*,
-  *Consejo para el CV* y *Ya no está*.
-
-Y se fue el verde contra el rojo. Dos botones del mismo peso enfrentados te
-obligan a decidir antes de leer, y encima el rojo decía "error" sobre una
-decisión normal: no aplicar a una oferta no es un error. El verde queda sólo
-donde significa algo, en *Aplicaste*.
-
-**El cartel del inglés se mudó a Métricas.** Sigue estando, sigue contando lo
-mismo y sigue diciendo cuánto puntuaba la mejor que se te escapó. Lo que cambió
-es dónde: era lo primero que leías al abrir Trabajos, todos los días, antes de
-la primera oferta. Ahora vive en Métricas, que es donde vas a mirar números, y
-**con la salida al lado**: un link directo a cambiar tu nivel declarado. Un
-número que no podés accionar es un reproche; con el link es información.
-
-**Un solo tema, el oscuro.** Se sacó el modo claro. Manteníamos dos paletas
-enteras y la mitad de las veces la segunda se olvidaba de alguna regla.
-
-**El texto de ayuda de los formularios se acortó.** Lo que pasaba de tres
-renglones se fue a un desplegable *Cómo funciona esto* debajo del campo. La
-ayuda larga no se leía y encima empujaba el campo siguiente fuera de pantalla.
-
-Los colores, tamaños y espacios salen todos de tokens definidos una sola vez en
-`vacantia/ui/css/tokens.css`. Ninguna regla escribe un color suelto, y hay un
-test que falla si alguien lo hace. Otro test verifica que todo par de texto y fondo
-llegue a 4.5:1 de contraste; ése fue el que agarró que el índigo de acción no
-servía como color de link sobre fondo oscuro.
-
----
-
-## 2.19. Dos `.bat` menos: Buscar ahora y Cómo viene funcionando
-
-`buscar_ahora.bat` y `estado.bat` ya no existen. Los dos hacían algo que la
-pantalla puede hacer, y mientras existieran la pantalla tenía que nombrarlos:
-*"doble clic en `buscar_ahora.bat`"* era la app explicando otro programa.
-
-**Buscar ahora** está al pie de la barra lateral, pegado a *Última búsqueda: hoy
-16:30*, porque es la acción sobre ese dato. En secundario: la acción de la
-pantalla de Trabajos es aplicar a una oferta. Donde no hay ninguna oferta que
-aplicar (la lista vacía, la primera corrida), ahí sí es el botón principal.
-
-Tres cosas que resuelve y conviene saber:
-
-- **Corre en un proceso aparte.** La búsqueda tarda minutos y el servidor de la
-  pantalla atiende de a un pedido: corriéndola adentro, la pantalla quedaría
-  congelada hasta que termine. Como proceso suelto, podés seguir marcando
-  ofertas mientras busca, y si cerrás la pantalla la corrida sigue.
-- **No abre ninguna ventana negra** (`CREATE_NO_WINDOW`), que era la mitad de la
-  gracia de sacar el `.bat`.
-- **No deja arrancar dos encimadas.** Mientras hay una en curso el botón queda
-  apagado y dice *Buscando ofertas*. Los límites del plan gratis son de la
-  cuenta, no del perfil.
-
-Cuando termina no hace falta apretar nada: el vigilante que ya existía avisa
-solo con *"Entraron 3 ofertas nuevas"*.
-
-**Cómo viene funcionando** es lo que mostraba `estado.bat`, ahora abajo de todo
-en Métricas: si está programado y cuándo vuelve, cuánto tardó la última corrida
-y qué encontró, cuándo fue el último aviso por Telegram, y las últimas quejas
-del registro adentro de un desplegable. Los números de la corrida se parsean del
-registro y se muestran en una tabla en vez de pegar la línea cruda: la línea del
-registro es texto de máquina, y en columnas los números se comparan de una
-corrida a la otra.
-
-El estado del Programador de tareas sale de `schtasks`, que ya viene con
-Windows. En otro sistema operativo el panel lo dice en vez de mentir.
-
-**Un bug que apareció construyendo esto:** la fecha de marcado se guarda en UTC,
-y la tarjeta cortaba los primeros diez caracteres del texto para quedarse con el
-día. Entre las 21:00 y la medianoche eso da la fecha de mañana, así que al día
-siguiente la tarjeta decía *"Aplicaste hoy"* a algo de ayer. Son tres horas por
-día, justo las que más se usa la pantalla. Ahora se pasa a la hora de acá antes
-de quedarse con el día, y hay un test que lo cubre.
-
----
-
-## 2.20. LinkedIn URLs: el lugar, todavía vacío
-
-Sección nueva en la barra lateral, abajo de Trabajos y adentro del grupo
-*Buscar*, con dos pestañas: **Jobs** (la que abre por defecto) y
-**Publicaciones**.
-
-Todavía no genera ninguna dirección. Está el lugar, las dos pestañas andando y
-escrito qué va a caer en cada una, para poder discutirlo mirándolo en vez de
-imaginándolo.
-
-Por qué existe: el scraper trae lo publicado hace uno a tres días, porque antes
-de eso ningún buscador lo indexó. Los avisos de hoy son justamente a los que
-menos gente se postuló, y la única forma de verlos es entrar a LinkedIn con la
-búsqueda ya armada. Son dos sistemas que se complementan, y la pantalla tiene
-que dejarlo evidente sin explicarlo con un párrafo.
-
-Son **pestañas** y no píldoras de filtro a propósito: las píldoras filtran una
-lista que sigue siendo la misma, y las pestañas cambian el contenido. Por eso
-van arriba del contenido, son links, y no viven adentro de una tarjeta.
-
----
-
-## 2.21. La pestaña Filtradas: auditar el filtro en la semana de prueba
-
-El 9/9 entraron 23 ofertas nuevas y a *Sin marcar* llegaron 2. Las otras 21 las
-sacó el sistema solo: **13 por idioma, 7 por lugar**, una la marcaste vos. Y las
-que se fueron por idioma eran las mejores del día: 95, 90, 85, 75, 75.
-
-El problema no era el número, era que **no había forma de saber si esos 21
-descartes estaban bien**. El sistema decide solo y no rendía cuentas.
-
-**La pestaña Filtradas** es eso. Cae ahí todo lo que el filtro saca por su
-cuenta, con el motivo que dio, y por cada oferta hay dos botones:
-
-- **Bien descartada.** El filtro acertó. Se va de la lista y no vuelve.
-- **Mal descartada.** El filtro se equivocó. Se va de la lista **y vuelve a Sin
-  marcar**, porque la oferta sigue estando y todavía le podés aplicar.
-
-Las dos la sacan de la pila, así que la lista se vacía a medida que revisás y no
-hay que acordarse dónde quedaste. Lo que no tocás sigue ahí esperando.
-
-**Arriba, el marcador**: cuántas veces acertó el filtro y cuántas se equivocó.
-Es **acumulativo y no lo achica el filtro de fechas**: la pregunta es "en toda
-la semana, ¿cuántas veces acertó?", y con dos días de muestra un porcentaje
-sobre lo de hoy no dice nada.
-
-**Sólo entran las de 50 puntos para arriba** (`PUNTAJE_PARA_REVISAR`). Si el
-filtro se equivocó con una de 20, esa oferta no te iba a servir igual: revisar
-ese tramo es gastar la atención donde el error no tiene consecuencia. Y son las
-que más quedan cuando el pozo se va agotando. El contador de la píldora cuenta
-sólo las que se muestran, así que no miente.
-
-**La meta son 40 revisadas** (`META_REVISION`). Con 40 y ningún error, el filtro
-acierta arriba del 90% y no hay nada que tocar; con 4 o más errores hay un patrón
-que mirar. Menos que eso es anécdota, y por eso el marcador muestra el progreso
-hacia la meta y no un porcentaje de aciertos: con 19 revisadas un "100%" suena a
-veredicto y todavía no lo es.
-
-**Cómo venía el 9/9:** 19 revisadas, 19 bien descartadas, 0 mal. Y las 43 que
-quedaban sin revisar puntuaban todas menos de 50, así que la pestaña quedó vacía
-hasta la corrida siguiente. Ese vacío lo dice con todas las letras, porque una
-pantalla vacía sin explicación se lee como "se terminaron las ofertas".
-
-Tres decisiones más que conviene tener escritas:
-
-- **La tarjeta muestra el motivo del sistema arriba de todo, con la explicación
-  completa.** En Sin marcar la pregunta es "¿me postulo?"; acá es "¿el filtro
-  acertó?", y sin el motivo a la vista no se puede contestar. Ya sirvió para ver
-  algo: varias de las mejores no se caen por nivel de inglés sino por
-  *"aviso en 'en'"*, que es la capa 1 del filtro, la del idioma del aviso.
-- **Ordenadas por puntaje, sin la banda de recientes.** Las de 95 son las que más
-  duele perder si el filtro erró, y son las primeras que hay que mirar.
-- **No es un veredicto sobre la oferta, es un veredicto sobre el filtro.** Vive
-  en su propio campo (`revision_filtro`) y no toca `aplicado`. Una marcada "mal"
-  vuelve a Sin marcar y después se puede aplicar o descartar normalmente, y el
-  contador no se pierde.
-
-**La píldora Filtradas se pinta distinta del resto**, con el azul de "estado del
-sistema" y un embudo al lado. Es lo que son esas ofertas: algo que decidió el
-sistema. No va en el índigo de acción, que convertiría la píldora en un botón, y
-no va en rojo, que acá significa error o destrucción: que el filtro descarte algo
-no es ninguna de las dos.
-
-Los dos botones de la tarjeta tampoco son rojos, y son de peso distinto
-(*Bien descartada* en índigo, que es la respuesta que vas a dar la mayoría de las
-veces) para que revisar 60 sea rápido.
-
----
-
-## 2.22. Dos fuentes nuevas: Indeed y Get on Board
-
-Prendidas en tu perfil desde el 9/9. La recolección pasó de ~95 avisos por
-corrida a **115**.
-
-### Get on Board: la única que no scrapea nada
-
-Get on Board tiene **API pública, abierta, sin token**. Se lee con `urllib`, que
-ya viene con Python. No usa TinyFish, no gasta una sola credencial, y devuelve
-el aviso ya estructurado: título, descripción, modalidad, países y fecha de
-publicación.
-
-Eso la vuelve la fuente más barata y más confiable del sistema, y conviene
-tenerla prendida por una razón de fondo: **cuando falte `TINYFISH_API_KEY`,
-todas las demás se saltean solas y ésta sigue trayendo.**
-
-Dos cosas que hubo que resolver:
-
-- **Es un portal chileno.** Sin recorte, la mitad de lo que trae son
-  presenciales en Santiago. Se le pide `country_code=AR`, que devuelve los que
-  aplican a la Argentina: en la prueba, 60 de 60 remotos.
-- **`countries` mezcla la modalidad con el país.** Un aviso remoto viene con
-  `["Remote"]` ahí adentro, y meter eso en `country` hacía que el filtro de
-  ubicación lo comparara contra "Argentina" y lo tirara. "Remote" se lee como
-  modalidad, no como país.
-
-### Indeed: Cloudflare deja pasar el listado y no el aviso
-
-Éste dio pelea, y las tres trampas salieron de probar contra el sitio, no de
-suponer:
-
-**1. Desde Python es `403 Forbidden`, con `server: cloudflare`.** Con TinyFish
-el listado sí vuelve. Pero la página del aviso, `viewjob?jk=...`, vuelve
-**vacía**: 0 bytes. La única forma de leerla es por el link de redirección que
-trae el propio listado, `rc/clk?jk=<id>&bb=<token>`.
-
-**2. Ese link lleva un token de sesión que cambia en cada corrida.** Si se
-guardara como identidad del aviso, el mismo puesto entraría de nuevo tres veces
-por día y el dedupe no lo agarraría nunca. Es el mismo tipo de bug que el 403 de
-Computrabajo: algo que parece cosmético y rompe el sistema entero. El token se
-usa **sólo para bajar el detalle, dentro de la misma corrida**, y lo que se
-guarda es `viewjob?jk=<id>`, que es estable y **abre perfecto en tu navegador**.
-Lo verifiqué abriendo uno: la bloquea el scraper, no el browser.
-
-**3. El aviso no dice cuándo se publicó**, ni en el listado ni en el detalle. La
-ventana la aplica el propio Indeed con `fromage`, igual que LinkedIn con
-`hours_old`: se piden sólo los últimos N días y lo que vuelve ya viene
-recortado. Se redondea a los valores que Indeed acepta (1, 3, 7, 14) y siempre
-para arriba, para no traer de más.
-
-**La mitad de los avisos no se puede leer, y esos no entran.** Cloudflare deja
-afuera a unos 10 de cada 20. Sin la página del aviso lo único que queda es la
-URL: el título sale del slug y dice "viewjob", sin empresa y sin descripción.
-Eso no se puede ni mostrar en una tarjeta, el modelo le pone 0 igual que a una
-oferta que de verdad no sirve, y encima cuesta una llamada. Se descartan y el
-log dice cuántas fueron. **Indeed aporta 9 a 11 avisos completos por corrida**,
-que es lo que de verdad rinde.
-
-Hay un reintento, y uno solo: medido dos veces, la primera ronda recupera
-algunos y la segunda no recupera ninguno. Las que faltan después del reintento
-son siempre las mismas.
-
-### Por qué no se puede paginar, y qué se hizo en cambio
-
-Pedir la segunda página (`&start=10`) devuelve 550 bytes que dicen, literal:
-
-> *"Para ver más de una página de empleos, crea una cuenta o inicia sesión."*
-
-**No es Cloudflare ni un problema de scraping: es una decisión de producto de
-Indeed.** Se probaron `start`, `sort=date`, la versión móvil y con
-`l=Argentina`: todas devuelven la misma primera página de 16 avisos, o el cartel
-de login. Y por lo mismo **el filtro de "no vistas" tampoco se puede usar**: ese
-filtro vive en tu cuenta de Indeed, y el sistema entra sin cuenta.
-
-Eso último no importa tanto, porque **lo que hace ese filtro ya lo hace el
-sistema, y mejor**: el dedupe contra `seen_jobs.json` no te muestra dos veces el
-mismo aviso, y lo hace para las ocho fuentes a la vez, no sólo para Indeed. En
-la corrida del 9/9 sacó 72 avisos repetidos de 115.
-
-**Lo que sí trae más es buscar por más términos**, porque cada búsqueda tiene su
-propia primera página. Medido con la misma ventana de 7 días:
-
-```
-1 término   -> 16 avisos
-6 términos  -> 51 avisos únicos
-```
-
-Por eso tu perfil quedó con seis términos y `max_queries: 4`: se consultan
-cuatro por corrida, rotando, y en dos días se cubren los seis.
-
-También quedó `sort=date`. Como sólo se puede leer la primera página, lo que
-entre ahí es todo lo que vamos a ver, y conviene que sea lo más nuevo. Encaja
-con lo que decías de que a veces publican todo junto y a veces de a uno.
-
-### El techo de Indeed son unos 11 avisos por corrida
-
-Traer más del listado **no sirve**, y esto está medido: el cuello no está en el
-listado sino en el detalle. De los avisos que se encuentran sólo se puede leer
-entre el 38% y el 50%, y no es rate-limiting: probado con lotes de 10, 5 y 3 con
-pausas crecientes, la tasa no se mueve (33%, 38%, 38%). Los que fallan son
-siempre los mismos en dos rondas seguidas, así que es una propiedad del aviso,
-no de la request. Traer 30 del listado en vez de 20 sube el gasto de TinyFish y
-deja los mismos 11.
-
-Se evaluó y **se descartó** exprimir el listado, que sí trae empresa, ubicación
-y un pedazo de la descripción: los links vienen en una lista aparte, sin el
-texto al lado, así que habría que emparejar cada bloque con su aviso por
-posición. Basta que Indeed intercale un anuncio para que los títulos y las
-empresas queden cruzados, y un aviso con la empresa equivocada es peor que un
-aviso que no está.
-
-### Un detalle que se arregló probando
-
-Las dos fuentes pedían el cupo entero (`results_wanted`) en cada término, así
-que el primero lo llenaba solo y el segundo no aportaba nunca: `Backend`
-devolvía 30 y `AI Engineer` 0 nuevos. Ahora el cupo se reparte entre los
-términos, y Get on Board pasó de 7 avisos a 10.
-
----
-
-## 2.23. El contador de postulaciones, y los gráficos de Métricas
-
-**"9 trabajos a los que apliqué", grande y en verde, arriba de la lista.** Es lo
-único de toda la app que mide el trabajo de **la persona** y no el del sistema:
-los otros contadores dicen cuántas ofertas hay, éste dice cuántas veces te
-postulaste. Por eso es lo más grande de la pantalla y lo único que usa un tamaño
-de letra por encima de la escala (`--text-hero`, token nuevo).
-
-Con un selector de período al lado: 7 días, 2 semanas, un mes, 2 meses, 3 meses,
-o desde que empezaste.
-
-**Y al lado, el reparto por semana.** Eso es lo que hace que el total signifique
-algo: 9 postulaciones en un mes puede ser tres semanas sin hacer nada y una a
-los tiros, y en el total eso no se ve. Hoy tu gráfico dice exactamente eso: 9,
-todas en la última semana, las once anteriores en cero.
-
-Tres decisiones:
-
-- **Va sólo en Sin marcar**, que es la pantalla que se abre por defecto. En
-  Filtradas ya está el marcador de la auditoría, y dos marcadores en la misma
-  pantalla no se leen: compiten.
-- **El verde no decora.** En este sistema significa lo que ya hiciste, igual que
-  en la tarjeta de una oferta aplicada, y va siempre con la palabra al lado.
-- **Las semanas en cero se dibujan igual**, pero en gris. Un hueco en el eje se
-  lee como "acá no hay dato", y acá el cero es el dato. En verde llamaban la
-  atención sin tener nada que decir.
-
-### Los gráficos: cuáles sí y cuáles no
-
-Los gráficos se dibujan **con HTML y los tokens del sistema, sin librería, sin
-SVG y sin una sola llamada a la red**. Una barra es un `div` con un ancho en
-porcentaje: el navegador ya sabe hacer eso, el texto usa la tipografía del
-sistema y escala con ella, y si cambia la paleta cambian también los gráficos.
-
-**Un gráfico se gana el lugar cuando hay varias magnitudes que comparar de un
-vistazo.** Con dos filas no hay comparación, hay dos números, y para dos números
-la tabla ocupa menos y se lee más rápido. El corte está en tres filas:
-
-| Sección | Qué quedó | Por qué |
-|---|---|---|
-| Lo que descartó el sistema | **tabla** | Son dos filas: idioma y lugar |
-| Por qué descartaste vos | **barras** | Cuatro motivos que se comparan entre sí |
-| De dónde vienen | **barras** | Ocho portales, y lo que importa es cuál pesa |
-| Puntajes | **columnas** | Nuevo. Ver abajo |
-
-**Cuando hay gráfico, la tabla sigue estando debajo, plegada** en *Ver los
-números*. Un gráfico no da el valor exacto ni se puede copiar, y a veces lo que
-se quiere es justamente el número.
-
-### El gráfico nuevo: qué tan bien te encajan las ofertas
-
-Es el que no existía y el que más dice. Muestra cuántas ofertas hay en cada
-tramo de puntaje, y contesta *"¿el sistema me está trayendo cosas buenas?"* sin
-abrir la lista. Una montaña pegada al cero significa que las búsquedas están mal
-apuntadas; una repartida significa que el problema es otro.
-
-Va en columnas y no en barras horizontales porque **el eje tiene un orden propio,
-de 0 a 100**: ordenarlo por tamaño, como se ordenan las barras, destruiría lo
-único que este gráfico tiene para decir.
-
-Los dos tramos de arriba van en verde, y ése es el único color distinto de todos
-los gráficos. Lo lleva porque significa algo: de ahí para arriba el sistema te
-avisa por Telegram.
-
-### Los tokens que hubo que agregar
-
-`DESIGN.md` no trae ninguno para gráficos, así que se propusieron cuatro:
-`--data-fill`, `--data-track`, `--data-destacada` y `--text-hero`. Son pocos
-porque **todos los gráficos de la app son de una sola serie**: la magnitud la
-lleva el largo de la barra, no el tono. No hay dos series que distinguir, así
-que no hay paleta que validar ni leyenda que poner, y el título dice qué se está
-midiendo.
-
-Un test falla si alguna regla de gráfico escribe un color propio en vez de usar
-esos tokens.
-
----
-
-## 2.24. LinkedIn URLs: armar la búsqueda de publicaciones a mano
-
-El agujero que tapa esto es el único del sistema que **no se puede resolver
-scrapeando**: muchas vacantes se publican como posteo del muro y nunca llegan a
-la pestaña de empleos (publicar así le sale gratis a la empresa). LinkedIn no
-deja leer eso desde afuera, y Google lo indexa uno a tres días tarde, así que
-cuando `google_posts` lo trae ya se llenó de postulantes.
-
-La salida es al revés: **la app arma la dirección y vos la abrís**. Es trabajo
-tuyo, pero te da lo único que importa acá, que es llegar temprano.
-
-**Publicaciones ahora va primero**, y Jobs quedó atrás: Jobs ya lo cubre el
-buscador automático.
-
-### Cómo se usa
-
-La pantalla va partida al medio: **a la izquierda lo que elegís, a la derecha lo
-que sale**. Tildás puestos, elegís si el reclutador escribe en español o inglés,
-dónde, qué dejar afuera, y de cuándo. Apretás **Armar la búsqueda** y la
-dirección aparece al lado, entera y a la vista. Tres botones: **Abrir en
-LinkedIn** (el principal), **Copiar link** y **Guardar en favoritos** con un
-nombre.
-
-Es la única pantalla de la app que **no scrollea**: mide lo que mide la ventana
-y lo que se mueve es cada mitad por dentro. Antes iba todo en una columna larga,
-así que la dirección nacía abajo de todo, fuera de pantalla; y como el
-constructor es un formulario GET, armarla recarga la página y el navegador la
-abre arriba. O sea que cada intento te mandaba al principio y encima el
-resultado quedaba donde no lo veías. Partido en dos eso desaparece, y además la
-columna del constructor vuelve al renglón donde estabas.
-
-Los favoritos quedan abajo, con *Abrir*, *Copiar* y *Sacar de favoritos*. La
-idea es tener cuatro o cinco y revisarlas dos veces por día: los posteos buenos
-duran horas.
-
-**Los puestos que aparecen tildables son tus palabras clave**, las mismas de
-*Mi perfil* → *Qué busco*. No hay una lista aparte que mantener: si agregás
-"GenAI Engineer" ahí, aparece acá; si sacás "Machine Learning Engineer", se va
-de acá. Un solo lugar donde tocar.
-
-Tiene una consecuencia, y conviene tenerla presente: **esas mismas palabras son
-las que el buscador automático usa para pegarle a los portales**. Si agregás una
-sólo para armar búsquedas de LinkedIn, también vas a empezar a recibir ofertas
-de ese puesto en la lista de Trabajos. Suele ser lo que querés, pero no es
-gratis.
-
-Si todavía no cargaste ninguna palabra clave, la pantalla ofrece seis puestos
-sugeridos para que no arranque vacía.
-
-### Los favoritos
-
-*Abrir* va en violeta, igual que *Armar la búsqueda*: es la acción de esa
-tarjeta, la única razón por la que guardaste la búsqueda. Copiar y sacar quedan
-en el menú de tres puntos, como en las ofertas.
-
-**La misma dirección no se guarda dos veces.** Si intentás guardar una que ya
-tenías, no se agrega ni se pisa la que estaba: aparece un cartel verde que dice
-con qué nombre ya la tenías, que es el dato que hace falta para encontrarla en
-la lista. Para renombrar una, se saca y se guarda de nuevo.
-
-Antes las dos formas de fallar contestaban lo mismo, y guardar algo repetido
-decía *"esa dirección no es una búsqueda de publicaciones"*: mentira, y encima
-te mandaba a corregir lo que estaba bien.
-
-### El anotador de al lado del botón
-
-**Apliqué desde acá**, con un menos, el número, un más y **Confirmar**, pegado a
-*Armar la búsqueda*. Al lado del rótulo hay un signo de pregunta: pasás el mouse
-por encima y ahí está la explicación entera, sin ocupar lugar el resto del
-tiempo.
-
-Existe porque lo que mandás desde un posteo no pasa por ninguna oferta de la
-lista: no entró por el scraper, no está en el historial y no hay tarjeta que
-marcar. Sin esto, justo el trabajo que más cuesta (buscar a mano, temprano, el
-mismo día que se publicó) era el único que no se contaba, y el número grande de
-Trabajos mentía para abajo.
-
-**Son dos pasos y no uno.** El más y el menos mueven un anotador que todavía no
-cuenta para nada. *Confirmar* lo pasa al contador grande de Trabajos y **lo deja
-en cero**. Así podés contar mientras mandás, corregir un toque de más, y recién
-cerrar la cuenta cuando terminaste.
-
-Lo que no confirmás **no se borra solo**: si cerrás la pantalla con 3 anotadas,
-siguen ahí cuando volvés. Y armar una búsqueda tampoco lo resetea, que es
-justamente lo que hacía falta: armar recarga la pantalla.
-
-Al confirmar aparece un cartel verde arriba que dice cuántas sumaste y cuántas
-van en total. Es lo único de los tres que avisa: el más y el menos se ven en el
-número mismo.
-
-Lo confirmado **suma al contador grande de Trabajos** y al reparto por semana.
-Es el mismo trabajo: mandar un CV. Cuando hay postulaciones anotadas así, el
-contador grande lo dice en su línea de abajo, para que no suba solo y sin
-explicación.
-
-De lo confirmado se guarda la fecha y hora, no un total: si fuera un número
-pelado, el selector de período no podría contestar "¿cuántas mandé esta
-semana?". La hora es la de cuando confirmaste, no la de cada envío, que nadie
-anotó; para lo que se usa, el día es el mismo.
-
-**Una cosa que todavía no se puede hacer**: deshacer un *Confirmar*. El menos
-saca del anotador, no de lo confirmado. Si algún día confirmás de más, avisame y
-lo arreglamos a mano.
-
-Las pestañas de Métricas no lo cuentan a propósito: sus números son un reparto
-de las 183 ofertas que entraron al sistema, y estas postulaciones no son ofertas
-del sistema. Meterlas ahí rompería la suma.
-
-### Lo que se descubrió probando contra LinkedIn
-
-Todo esto se verificó el 10/9/2026 con la cuenta abierta, no salió de leer
-documentación. Está acá porque si algún día deja de funcionar, esto es el mapa.
-
-**Los parámetros que andan:**
-
-```
-keywords=(boolean)               el texto, con AND/OR/NOT y comillas
-datePosted="past-24h"            y "past-week", "past-month"
-sortBy="date_posted"             o "relevance"
-postedBy=["first","following"]   mi red y a quien sigo
-origin=FACETED_SEARCH
-```
-
-Los valores van **con comillas adentro**. LinkedIn acepta las dos formas pero
-devuelve ésta, así que la guardada es igual a la suya.
-
-**`contentType=["jobs"]` existe y quedó afuera.** Es el filtro "Anuncios de
-empleo". Funciona, pero deja la lista en **cero**: ese tipo de contenido es el
-posteo con formato de vacante de LinkedIn, no el texto libre que escribe un
-reclutador, que es justo lo que buscamos. Un control que rompe la búsqueda no
-es una opción, es una trampa.
-
-**`NOT (a OR b)` devuelve cero.** Éste fue el hallazgo que más costó:
-
-```
-... AND buscamos NOT (Junior OR trainee OR pasantía)   ->  CERO
-... AND buscamos NOT Junior                            ->  trae posteos
-... AND buscamos NOT Junior NOT trainee NOT pasantía   ->  trae posteos
-```
-
-LinkedIn agrupa con paréntesis en todos lados **menos después de un NOT**. Se
-emite un NOT por término.
-
-**Y hay un largo máximo.** Arriba de cierto punto LinkedIn devuelve cero sin
-avisar: aplica los filtros, muestra "No se han encontrado resultados" y te deja
-creyendo que no hay vacantes. Medido la misma tarde, con la misma cuenta:
-
-| Caracteres | Qué tenía | Resultado |
-|---|---|---|
-| 70 | 2 puestos + 2 frases | trae posteos |
-| 96 | 2 puestos + 2 frases + lugar | trae posteos |
-| 117 | 2 puestos + 4 frases | trae posteos, de hace 1 minuto |
-| 164 | 2 puestos + 6 frases | **cero** |
-
-El tope quedó en **110**, con margen. Cuando lo que elegís no entra, **se
-recorta y la pantalla te lo dice**: qué quedó afuera y por qué. Callarlo sería
-peor que el problema, porque creerías estar buscando "vacante" y no.
-
-Qué se sacrifica primero, en orden: se conservan **dos frases-gatillo antes que
-nada** (sin ellas la búsqueda deja de traer vacantes y trae cualquier posteo que
-hable de AI Engineer), después los NOT, y último las frases de más.
-
-### Una cosa que NO quedó cerrada
-
-Varias búsquedas con el NOT puesto dieron cero, y **no pude distinguir si el NOT
-rompe la consulta o si simplemente filtró los pocos posteos que había**. En 24
-horas hay dos o tres posteos de AI Engineer: alcanza con que uno diga "Ssr" para
-que el NOT lo saque y quede vacío. Como no lo pude probar, **no se codificó
-ninguna regla al respecto**: el NOT se emite con la sintaxis correcta y listo.
-
-Si al usarlo ves que tildar *Puestos junior* siempre te deja en cero, destildalo
-y avisá: ahí sí hay algo para mirar con datos de verdad.
-
----
-
-## 2.25. Cuando el motivo del filtro está mal
-
-El caso que lo disparó: una oferta de 90 puntos, *Full Stack AI Engineer* de
-Carda Health, filtrada por **país 'Estados Unidos' fuera de Argentina**. El
-aviso no dice en ningún lado dónde es. El modelo dedujo el país de la empresa,
-que es estadounidense, y el prompt le prohíbe explícitamente hacer eso.
-
-Estuvo bien que no llegara, porque está en inglés y el inglés está desactivado.
-Lo que estuvo mal fue el motivo. Y ahí está el riesgo de verdad: **alguna va a
-quedar afuera por una deducción equivocada y sin ningún otro motivo que la
-sostenga**.
-
-### Lo que se midió
-
-Sobre las 204 del historial, el 11/9/2026:
-
-| | Ofertas |
-|---|---|
-| Caen sólo por idioma | 121 |
-| Caen por idioma **y** por lugar | 28 |
-| Caen sólo por lugar | 17 |
-| Pasan todo | 38 |
-
-### Los tres arreglos
-
-**1. Se dicen todos los motivos, no el primero.** Eran 28 las que caían por los
-dos y mostraban uno solo. Ahí estaba el daño: si el motivo que se mostraba
-estaba mal atribuido, la respuesta honesta era *mal descartada*, y la oferta
-volvía a la lista aunque el otro motivo la sacara con todo derecho.
-
-**2. El idioma se dice primero.** Es el motivo más firme: es el idioma en que
-está escrito el aviso, se verifica leyéndolo, y encima tiene una red
-determinista que busca la exigencia en el texto. El lugar sale de lo que
-extrajo el modelo, y ahí es donde aparecen las deducciones.
-
-**3. Un botón más: «Bien, motivo equivocado».** Era la respuesta que faltaba, y
-es exactamente la que no tenías cuando apareció el caso. La oferta se queda
-afuera, como con *Bien descartada*, y se anota aparte. El marcador de arriba lo
-muestra al lado de las otras dos cuentas.
-
-En Métricas, la tabla de lo que saca el sistema ahora cuenta por **cada** filtro
-que saca la oferta, no por el primero, y avisa cuántas se cuentan dos veces.
-
-### Y el prompt
-
-Se le agregó al modelo el caso concreto que falló, con nombre y apellido, más la
-consecuencia: una empresa estadounidense o europea contratando en remoto no es
-un trabajo estadounidense ni europeo. Aplica a lo que se puntúe de acá en
-adelante; lo que ya está en el historial quedó con el país que le puso aquel
-día.
-
-**Lo que NO se hizo, y por qué.** Estuve por hacer que un país deducido no
-pudiera filtrar solo. Lo medí antes: de 14 ofertas con un país que el aviso no
-nombra literalmente, 4 volverían a la lista, y al mirarlas una por una **las
-cuatro estaban bien deducidas** — venían de `es.linkedin.com`, decían "Madrid",
-o el que publicaba era `empleoschileve`. O sea que la regla habría dejado pasar
-ofertas de España y de Chile creyendo que arreglaba algo. Quedó afuera hasta
-tener una forma de distinguir deducción buena de deducción inventada.
-
-## 2.26. El CSS y el JavaScript salieron de adentro de Python
-
-Esto es lo que venías sufriendo, y no era culpa de Python.
-
-**El CSS eran 1521 líneas adentro de un string de Python** (`estilos.py`), y el
-HTML 1816 líneas de f-strings (`render.py`). Escribir CSS entre comillas
-significa no tener resaltado de sintaxis, ni autocompletado, ni un linter que te
-avise que te comiste una llave. Cada cambio de pantalla se sentía diez veces más
-caro de lo que era, y por eso terminabas limitando el viewport y explicándole
-media hora al modelo algo que en un archivo `.css` se ve de una.
-
-Ahora el CSS vive en `vacantia/ui/css/`, en siete archivos de verdad, y el
-JavaScript en `vacantia/ui/static/app.js`. `estilos.py` quedó como lo único que
-tiene que estar en Python: junta los siete archivos en orden y arma las
-`@font-face` según qué fuentes haya en disco.
-
-**Se leen del disco en cada pedido.** Tocás un `.css`, apretás F5 y lo ves. No
-hay que reiniciar el servidor ni reconstruir nada. Son 75 KB de un disco local
-para una app que usan tres personas en la misma máquina: no cuesta nada.
-
-### La pantalla dejó de recargarse entera
-
-Se sumó **htmx**, que son 50 KB de JavaScript servidos por la app (**nunca desde
-un CDN**, por lo mismo que las fuentes: la máquina puede estar sin internet). No
-hay Node, no hay paso de compilación, y tu familia sigue instalando sólo Python.
-
-Lo que habilita es que el servidor conteste **un pedacito de HTML** en vez de
-una página entera. Eso es lo que arregla de raíz los tres dolores que veníamos
-parchando de a uno: el scroll que saltaba al marcar, la columna del constructor
-de LinkedIn que volvía arriba al armar, y el anotador que tenía que sobrevivir
-una recarga que no debería existir.
-
-**La pantalla partida al medio de LinkedIn URLs queda como está.** Ahí no era un
-parche: es mejor así.
-
-### Ahora se ve en qué anda la búsqueda
-
-Era lo que faltaba. Antes apretabas *Buscar ahora*, la página se recargaba para
-cambiar tres palabras, y después había un silencio de varios minutos en el que
-no sabías si estaba pasando algo o se había colgado.
-
-Ahora el pie de la barra lateral cuenta la etapa, y cambia sola:
-
-    Buscando en Getonbrd
-    Buscando en LinkedIn Jobs
-    Revisando 103 ofertas
-    Puntuando contra tu CV
-    22 de 24
-
-El motor corre en otro proceso y no puede hablarle a la pantalla, así que el
-progreso sale de leer el registro **desde el byte donde estaba cuando arrancó
-esta corrida**. Por eso no puede confundirse con la de ayer y no cuesta nada
-aunque `vacantia.log` pese 7 MB.
-
-Tres decisiones que conviene no deshacer:
-
-* **No hay barra de porcentaje.** No se sabe de antemano cuántas fuentes van a
-  contestar ni cuántas ofertas van a entrar, así que cualquier porcentaje sería
-  inventado. Durante el puntaje sí se sabe el total, y ahí sí van los números.
-* **No hay spinner, ni punto que late, ni animación de ninguna clase.** El
-  cartel vive al costado de lo que estás leyendo, y algo que se mueve en el
-  borde del campo visual no se puede ignorar. Que el texto cambie de etapa ya
-  informa lo mismo sin obligarte a mirarlo.
-* **Pregunta cada 2 segundos mientras busca y cada 15 cuando está quieto.** El
-  intervalo viaja adentro del pedacito de HTML que vuelve, así que se acelera y
-  se afloja solo, sin una línea de código nuestro.
-
-### El aviso de ofertas nuevas ahora lo manda el servidor
-
-Antes eran dos relojes distintos: uno preguntaba por la corrida y otro le pedía
-un JSON al servidor cada 20 segundos para ver si había entrado algo, y armaba el
-texto del cartel a mano en JavaScript. Ahora es un solo pedido, el servidor
-manda el aviso ya escrito, y htmx lo pone abajo a la derecha sin tocar el resto.
-
-Dos cosas que cambiaron para mejor de paso:
-
-* **El aviso está en todas las pantallas**, no sólo en Trabajos. Antes, si
-  buscabas parado en Métricas, no te enteraba nadie.
-* **Distingue que entren ofertas de que la lista cambie.** Una corrida puede
-  traer veinte avisos y que los veinte se caigan por filtro, o podés estar
-  marcando desde otra pestaña: el número no sube pero lo que estás mirando ya no
-  es lo que hay. Antes ese caso no decía nada; ahora dice *La lista cambió*.
-
-**Lo que no cambió, porque sigue siendo lo correcto: no recarga sola.** Si
-estás escribiendo el motivo de un descarte, una recarga te lo borra. Avisa, y
-decidís vos.
-
-
-## 2.27. Qué te están pidiendo, y el cartel que cambia con la pestaña
-
-### El gráfico de habilidades
-
-Es lo que pediste: ver qué piden los avisos que entran, sin que esté atado a
-programación, porque la misma pantalla le tiene que servir a marketing y a
-seguridad e higiene.
-
-**No cuesta ninguna llamada extra al modelo.** Ya le mandábamos el aviso entero
-para que lo puntúe, y ya nos devolvía un campo con lo que pide: estaba guardado
-en cada oferta desde siempre y no lo estábamos mirando. De tus 219 ofertas, 209
-ya tenían el dato, así que el gráfico salió lleno el primer día:
-
-    Python 153 · AWS 41 · RAG 34 · LLM 33 · LangChain 28 · FastAPI 27 · GCP 24
-
-Lo que sí cambió es lo que le pedimos al modelo. Antes decía *"key tech from
-JD"*, o sea tecnología, que para tu hermana no sirve. Ahora le pedimos las
-habilidades, herramientas, plataformas, certificaciones y normas que el aviso
-exige, con ejemplos de los tres rubros de la casa. Un aviso de marketing va a
-devolver *Google Analytics, Meta Ads, SEO*, y uno de seguridad e higiene
-*ISO 45001, IRAM, auditoría interna*.
-
-**No hay ninguna lista de tecnologías escrita en el código, y es la decisión
-importante.** Una lista habría que mantenerla para siempre y aun así nunca
-cubriría los oficios de los demás. El modelo lee el aviso y devuelve lo que ese
-aviso pide; nosotros sólo contamos.
-
-Lo único que hacemos nosotros es juntar las escrituras distintas de la misma
-cosa, y ahí hay una regla que conviene entender porque es la que evita que el
-gráfico mienta:
-
-* **Mayúsculas**: "python" y "Python" son la misma, y gana la escritura más
-  frecuente. Por eso sale *PostgreSQL* y no *postgresql*, sin tener una tabla de
-  nombres propios.
-* **Plurales, pero sólo cuando las dos formas aparecen de verdad.** "LLMs" se
-  une a "LLM" porque en tus avisos están las dos. *Kubernetes* y *Analytics* no
-  se tocan, porque el singular no existe en ningún lado. **La regla la ponen los
-  datos, no una lista**, y es lo que hace que ande igual en cualquier rubro.
-
-Lo que **no** hace es unir sinónimos: *GenAI* y *Generative AI* salen como dos
-barras. Unirlos necesitaría un diccionario, que es exactamente lo que estamos
-evitando. Mezclar de más inventa una tendencia que no existe, y eso es peor que
-dos barras separadas.
-
-El pie dice cuántas ofertas todavía no pasaron por el modelo. Sin eso, un
-gráfico flaco se lee como "no piden nada" en vez de "todavía no lo miré todo".
-
-### El cartel de arriba ahora habla de la pestaña en la que estás
-
-Tenías razón con lo de los 11 contra los 9. El cartel sumaba las que contás a
-mano desde un posteo de LinkedIn, así que parado en **Apliqué** decía 11 y abajo
-había 9 tarjetas. Un cartel más grande que la lista que tiene debajo se lee como
-un error de la app.
-
-* **Sin marcar** — el total, de donde sea que salga. Ahí la pregunta es "¿estoy
-  haciendo algo?", que no distingue de dónde salió cada postulación.
-* **Apliqué** — sólo las de esta lista, y lo dice: *sólo las de esta lista*.
-* **Descarté** — cambia a los motivos, con el mismo selector de período.
-* **Filtradas** no lleva cartel: ya tiene el marcador de la auditoría, y dos
-  marcadores en la misma pantalla no se leen, compiten.
-
-**El de Descarté no va en verde**, y no es un detalle de color. El verde en esta
-app significa lo que ya hiciste, igual que en una oferta aplicada. En verde, 82
-descartes se leían como una felicitación. Va neutro. Rojo tampoco, porque
-tampoco es un error: descartar bien es lo que hace que el sistema aprenda.
-
-Y ahí el gráfico es por motivo y no por semana, a propósito. El ritmo importa
-cuando mandás CVs, porque estás midiendo tu trabajo. Descartar no es trabajo que
-quieras sostener, así que saber que descartaste parejo a lo largo del mes no te
-dice nada. Lo que te dice algo es que **51 de 82 fueron por inglés**, porque eso
-es una perilla de Mi perfil esperando que la muevas.
-
-### El hueco de la derecha
-
-El contenido tenía un tope fijo de 1200px. Eso dejaba 370px de vacío **pegados
-al borde derecho**: margen enorme de un lado y ninguno del otro, que es lo que
-se veía roto. Ahora usa el 85% de lo que queda después de la barra lateral,
-centrado.
-
-Un detalle por si alguna vez lo tocás: el 85% está hecho con padding en
-porcentaje y no con `width` más `margin: auto`. El contenido es un item flex al
-lado de la barra lateral, así que un porcentaje de `width` se mide contra la
-ventana entera, lateral incluida, y a 1568px se pasaba de largo.
-
-### Métricas, reorganizada
-
-Mi primera versión de esto la dejó peor y tenías razón en decirlo. Había metido
-los cinco gráficos en cinco tarjetas idénticas con borde y fondo, y así nada
-decía cuál mirar primero: todo pesaba igual. Encima competían con las tarjetas
-de números de arriba, que sí tienen que ser tarjetas porque son cinco valores
-que se comparan entre sí.
-
-Lo gracioso es que `DESIGN.md` ya lo tenía escrito hace rato, y yo lo pasé por
-arriba: *trocear todo el contenido en cards iguales es el default genérico y
-aplana la jerarquía*. Es exactamente lo que hice.
-
-Ahora la pantalla cuenta tres cosas, en el orden en que sirven:
-
-1. **Las tarjetas de números**, arriba, como estaban.
-2. **Qué te están pidiendo**, en un bloque con superficie propia. Es el único de
-   la pantalla que la tiene, y la tiene porque es el único accionable: los demás
-   describen lo que pasó, éste sugiere qué hacer. Las quince barras van en dos
-   columnas, porque en una sola eran una torre que no se abarca de un vistazo.
-3. **Qué está entrando, y qué queda afuera**, con título de sección propio, y
-   abajo los cuatro desgloses. **Sin tarjetas**: lo que los separa es el espacio
-   y una línea fina arriba de cada título. Alcanza, y deja la jerarquía intacta.
-
-Los desgloses van en multicolumna y no en grid, por el alto. Miden cosas muy
-distintas, y con un grid cada fila mide lo que el bloque más alto de esa fila,
-así que al lado del más corto quedaba un agujero. Se paga con el orden de
-lectura, que pasa a ser la columna izquierda entera y después la derecha, y se
-puede pagar porque ningún desglose se entiende sólo después de leer el de al
-lado.
-
-### Cómo viene funcionando, al pie y aparte
-
-Estaba desconectado porque efectivamente lo estaba: era un `h2` suelto colgando
-abajo de todo, sin relación visual con nada.
-
-Ahora es una sección propia al pie, separada por una línea, y con un renglón que
-dice qué es: **el estado del programa, no el de tu búsqueda**. Son dos clases de
-cosa distintas, y leerlas juntas las pone en la misma categoría. "Cuántas ofertas
-piden inglés" y "cuándo corre la tarea programada" no se miran por las mismas
-razones ni en los mismos momentos.
-
-**Y le saqué el botón de Buscar ahora.** Tenías razón: Métricas es una pantalla
-de lectura, se entra a entender qué está pasando y no a hacer algo. El botón
-estaba suelto al final de todo, lejos de cualquier cosa con la que tuviera
-relación. Además ya está donde corresponde, al pie de la barra lateral, que se
-ve desde todas las pantallas y ésta incluida.
-
-
-## 2.28. Por qué mandás 11 CV por semana y no 40
-
-Esto salió de la pregunta sobre Apify, y la respuesta terminó siendo otra cosa.
-
-### Primero, la pregunta que hiciste
-
-**Ya scrapeamos LinkedIn, y es nuestra fuente más grande.** De tus 220 ofertas,
-134 vienen de ahí. Los scrapers de Apify de la captura hacen exactamente lo
-mismo que nosotros: leen la página pública del buscador de empleos, sin login.
-Uno de ellos lo dice en su propia documentación, que te recomienda abrir la
-búsqueda en incógnito para copiar la dirección.
-
-Lo único que tienen de más son **proxies residenciales**: IPs de casas reales,
-alquiladas, que rotan en cada pedido. Eso importa sólo cuando LinkedIn te tira
-el `HTTP 999`, que es su bloqueo por reputación y volumen de IP. Nos pasa con
-los perfiles de persona, y por eso los esquivamos vía Google (2.7). Con el
-buscador de empleos no nos pasa.
-
-Dos cosas de la captura, por las dudas: lo que se ve ahí es el agente
-**buscando scrapers en el catálogo y pidiendo su ficha**, no trayendo vacantes.
-Y los 112 que viste, si llegaron, son resultados crudos de una búsqueda: sin
-deduplicar contra lo que ya viste, sin puntuar y sin filtrar. Nuestras 220 son
-el acumulado ya procesado. No son números comparables.
-
-### La respuesta de verdad
-
-Tu embudo al 12/9/2026:
-
-| Etapa | Ofertas |
-|---|---|
-| Recolectadas | 220 |
-| Bloqueadas por el filtro de idioma | 112 |
-| Descartadas por vos por inglés | 51 |
-| Bloqueadas por lugar | 35 |
-| Aplicaste | 9 |
-
-**163 de 220 mueren en inglés**, o sea el 74% de lo que junta el sistema. Y de
-las que el filtro bloqueó sin preguntarte, **33 puntuaban 60 o más**: eran buenas
-y nunca las viste. La mejor puntuaba 95.
-
-Después probé qué pasa si toco cada filtro, sobre las ofertas **que ya están en
-tu base**, sin scrapear nada nuevo:
-
-| Cambio | Para revisar hoy | De esas, con 60+ |
-|---|---|---|
-| Como está ahora | 0 | 0 |
-| Aceptando avisos en inglés | 90 | 12 |
-| Aceptando híbrido y presencial | 2 | 0 |
-| Sin la lista de títulos excluidos | 0 | 0 |
-
-Hay **90 ofertas guardadas, ya puntuadas contra tu CV, esperando detrás de un
-interruptor**. Es tu objetivo de 40 a 50 por semana durante dos semanas,
-disponible ahora y gratis.
-
-Y fijate el detalle: el único filtro que mueve la aguja es el inglés. El modo de
-trabajo cuesta 2 ofertas y la lista de títulos excluidos no cuesta ninguna. No
-hay nada más que aflojar.
-
-El interruptor es `filters.language.allow_english` en tu perfil, o la casilla
-*Aceptar avisos en inglés* en **Mi perfil**. **No lo toqué**: es tu decisión, y
-con A2 declarado mandar CV a avisos en inglés tiene un costo real.
-
-### Por qué no conectamos Apify
-
-Tres razones, y la tercera es la que manda:
-
-1. **Rompe el modelo.** Querías que cada persona de la casa lo instale y lo
-   corra en su máquina. Apify necesita token de API y cuenta con tarjeta: o
-   pagás vos por los cinco y centralizás algo que hoy es local, o les pedís a
-   todos que carguen una tarjeta para buscar trabajo.
-2. **Cuesta plata por resultado.** El plan gratis da 5 dólares de crédito por
-   mes; el de entrada son 19 mensuales, más 8 dólares por GB de tráfico
-   residencial y 1 dólar cada 1000 resultados.
-3. **No resuelve el cuello de botella.** El doble de ofertas en inglés es el
-   doble de ofertas que el filtro va a tirar.
-
-**Cuándo sí valdría la pena:** cuando prendas el inglés, te comas esas 90 y
-sigas quedándote sin cosas para mirar. Ahí el límite pasa a ser de verdad el
-volumen. Si algún día aprendés inglés y el objetivo pasa a ser el mercado de
-afuera, esta nota es el punto de partida para volver a evaluarlo.
-
-
-## 2.29. Más de un CV, y qué CV mandar en cada oferta
-
-Lo que te diste cuenta hablando con tu viejo: casi todos podemos postularnos a más
-de una clase de puesto. Vos, como AI Engineer y como Full Stack.
-
-### Qué cambió
-
-- **Mi perfil tiene *Mis CV*.** Cada uno con nombre, palabras de búsqueda y texto.
-  *Agregar otro CV* primero guarda lo que tenías escrito y después agrega uno vacío.
-- **Cada CV sale a buscar.** Era lo importante y no se veía: tus fuentes con
-  términos propios (LinkedIn, Indeed, Get on Board) ignoraban las palabras clave
-  del perfil, y **ninguna buscaba Full Stack**. Ahora las palabras de cada CV se
-  suman en todas.
-- **Se puntúa contra el CV que mejor encaja.** Antes una oferta de Full Stack se
-  comparaba con tu CV de AI, salía baja, y el filtro de puntaje mínimo la escondía.
-- **Cada tarjeta dice qué CV mandar**, y Consejo y Mensajes usan ése.
-- **Telegram también lo dice**, cuando hay más de un CV.
-
-### Las ofertas que ya tenías
-
-No se re-puntuaron: eran unas 37 llamadas al modelo. Muestran una recomendación
-**estimada** comparando las palabras del aviso con cada CV, que es lo mismo que
-mira un filtro ATS. Es tosca pero honesta, y por eso la tarjeta dice *estimado*.
-Las ofertas nuevas traen la recomendación del modelo.
-
-### Decisiones que conviene no deshacer
-
-- **Con un solo CV, nada cambia.** El prompt de scoring sale byte a byte igual que
-  antes, y hay un test que lo fija. Tu papá no nota nada.
-- **Un CV vacío no cuenta.** Si contara, apenas apretás *Agregar otro CV* todas
-  las tarjetas pasarían a recomendar contra un CV que no dice nada.
-- **Se guarda el id del CV, no el nombre.** Renombrar no rompe nada, y si sacás un
-  CV, las ofertas que lo recomendaban se vuelven a estimar solas.
-- **Borrar un CV pide confirmación, y después sí borra el archivo.** Al principio
-  sólo lo sacaba del perfil y dejaba el texto, pero así no había forma de
-  deshacerse de un CV mal cargado. La confirmación se abre en el mismo bloque,
-  con el nombre del CV a la vista. El archivo no se borra si lo lee otro CV.
-- **Se ve un CV por vez**, con el desplegable *Estás viendo el CV*. Con cinco o
-  seis uno abajo del otro, Mi perfil era una columna interminable. Los demás
-  siguen en el formulario, escondidos, así lo no guardado no se pierde.
-- **Enter en un campo guarda, y nada más.** Enter aprieta el primer botón del
-  formulario, y ése era *Agregar otro CV*: un Enter en cualquier campo agregaba
-  un CV. Al principio del formulario hay un botón de guardar invisible para
-  eso. No lo saques: con el borrado, el primer botón podría ser el que borra.
-- **Con varios CV, el "qué hago" de tus datos personales no va al modelo.** Dice
-  "AI Engineer: conecto modelos...", o sea que describe uno solo de tus perfiles y
-  sesgaba el puntaje contra el otro. Lo que buscás y lo que no te sirve sí van,
-  porque son tuyos y no de un CV.
-
-### Lo que falta, y es la continuación natural
-
-Registrar **qué CV mandaste** cuando marcás *Apliqué*. Con eso, en unas semanas se
-puede ver cuál te consigue más respuestas, que es la pregunta de fondo.
-
-## 2.30. Las empresas de cada perfil, separadas
-
-**Qué pasó.** Isaías y papá usaban el mismo archivo de empresas. Cuando se guardó
-el perfil de papá, su lista reemplazó a la de Isaías: se perdieron las 10 empresas
-y quedaron 2 entradas mal cargadas, con la dirección pegada en el nombre y sin URL.
-La fuente de empresas dejó de revisar cualquier página, y no avisaba nada.
-
-**Qué se hizo.** Las 10 de Isaías volvieron desde el último commit. Papá pasó a su
-propio archivo, vacío. Sus dos entradas eran estas direcciones, por si las quiere
-volver a cargar bien, una por línea como `Nombre | dirección`:
-
-    https://empleo.adecco.com.ar/#/#/
-    https://careers.techint.com/search/?createNewAlert=false&q=supervisor+QHSE&locationsearch=argentina
-
-**Para que no vuelva a pasar**, dos cosas. Los perfiles nuevos nacen con su propio
-archivo. Y si igual dos perfiles quedan apuntando al mismo, el primero que guarde
-pasa solo a tener el suyo, sin tocar la lista del otro.
-
-## 2.31. LinkedIn URLs: la pestaña Jobs
-
-Es `estrategia-links-linkedin-pestana-jobs.md` hecho pantalla, con la misma forma
-que Publicaciones: constructor a la izquierda, dirección, favoritos y anotador a
-la derecha y abajo.
-
-**Qué se puede elegir y qué parámetro arma:**
-
-    Puestos + Que además diga + Qué dejar afuera  ->  keywords
-    Dónde (Argentina / Cualquier lugar)           ->  geoId=100446943 o nada
-    Modalidad                                     ->  f_WT (1 presencial, 2 remoto, 3 híbrido)
-    Nivel                                         ->  f_E (4 es "Intermedio", el Mid-Senior)
-    Publicado hace (1h, 2h, 24h, semana, mes)     ->  f_TPR=r3600 ...
-    Ordenar por                                   ->  sortBy=DD o R
-    Menos de 10 candidatos                        ->  f_JIYN=true
-    Solicitud sencilla                            ->  f_AL=true
-
-El link 1 del documento sale letra por letra igual, y hay un test que lo fija.
-
-**Decisiones que conviene no deshacer:**
-
-- **Un NOT por término** (`NOT Junior NOT Jr`), y no `NOT (Junior OR Jr)` como dice
-  el documento. En Publicaciones la forma agrupada devolvía cero. En Jobs se probó
-  el 13/9/2026: `"AI Engineer" NOT Junior NOT Jr NOT Ssr NOT Semisenior NOT Trainee`,
-  Argentina, última semana, trajo 18 avisos.
-- **Sin tope de largo.** El corte de 110 letras se midió en el buscador de posteos;
-  en Jobs no se recorta nada.
-- **Favoritos en el mismo archivo**, separados por cómo empieza la dirección. Los
-  guardados antes siguen en Publicaciones sin migrar.
-- **Un anotador por pestaña** (`linkedin_jobs_postulaciones.json` aparte). Lo
-  confirmado de las dos suma al contador de Trabajos, que ahora dice "N anotadas en
-  LinkedIn URLs". El signo de pregunta de Jobs avisa que, si el aviso ya está en
-  Trabajos, se marca ahí y no acá, para no contarlo dos veces.
-- **Los signos de pregunta del constructor abren hacia abajo y a la derecha.** La
-  columna scrollea y recorta lo que se sale; abiertos como el del anotador, los
-  cortaba.
-
-**Ojo:** al abrir la búsqueda, LinkedIn mostró un aviso de que va a retirar de a
-poco la búsqueda de empleo clásica desde septiembre. Si un día los links dejan de
-filtrar, es por eso: hay que rehacer los filtros a mano allá y actualizar
-`vacantia/ui/linkedin_urls.py`.
+Cada perfil tiene su `companies-<nombre>.json`. Pasó que guardar el perfil de
+papá pisó tu lista. Si dos perfiles quedan apuntando al mismo archivo, el primero
+que guarda pasa a tener el suyo.
 
 ## 2.32. Preparar la copia de un familiar
 
 Cada familiar recibe una **copia independiente**: su carpeta, su repo de GitHub y
-su propio Claude Code. No queda ningún vínculo con tu repo: no le llegan tus
-actualizaciones y a vos no te llega nada de ellos.
+su propio Claude Code. No queda ningún vínculo con tu repo.
 
-### Qué tan listo está
+**Qué hay en `scripts/copia-familiar/`** (en tu repo son archivos sueltos):
 
-| | Hoy | Qué lo lleva al 100 % |
-|---|---|---|
-| Instalar el programa en su compu | **80 %** | Usarlo tu semana de prueba. Un botón **Borrar perfil**, para no tener que borrar a mano los perfiles ajenos (prompt listo en el plan). |
-| Que use su Claude Code sin romper nada | **85 %** | Probar las barandas en la primera copia de verdad: que `git push --force` quede bloqueado y que `git push` pida confirmación. |
+- **`CLAUDE.md`:** reemplaza al tuyo. Le dice a su Claude que habla con alguien
+  que no programa y cómo guardar los cambios.
+- **`settings.json`:** va a `.claude/settings.json` y bloquea de verdad:
+  - borrar historial (`push --force`, `reset --hard`, `clean`, `branch -D`);
+  - leer o editar `.env`;
+  - editar `state/` y `scripts/`.
 
-### Lo que se armó
+  Subir y unir cambios pide confirmación.
+- **`preparar.ps1`:** deja todo listo. Se niega si la carpeta sigue conectada a tu repo.
 
-- **`scripts/copia-familiar/`**, que en tu repo son archivos sueltos y no te
-  cambian nada:
-  - **`CLAUDE.md`:** reemplaza al tuyo en la copia. Le dice a su Claude que habla
-    con alguien que no programa, que avise antes de tocar algo, y cómo guardar
-    los cambios.
-  - **`settings.json`:** va a `.claude/settings.json`. Es lo único que **bloquea
-    de verdad**. Prohíbe:
-    - borrar historial (`push --force`, `reset --hard`, `clean`, `branch -D`);
-    - leer o editar `.env`;
-    - editar `state/` y `scripts/`.
+`.claude/rules/` viaja con la copia: lo usan los dos Claude.
 
-    Subir y unir cambios pide confirmación.
-  - **`preparar.ps1`:** lo deja todo listo.
-    - **Si la carpeta sigue conectada a tu repo, se niega** y no toca nada. Así
-      no lo podés correr por error en tu carpeta de trabajo.
-- **`.claude/rules/`**, compartido: los comandos y la arquitectura
-  (`proyecto.md`), más reglas que se cargan al tocar la pantalla, las fuentes o
-  los tests. Viaja con la copia y lo usan los dos Claude. Tu `CLAUDE.md` quedó
-  corto, con tu forma de trabajar.
-- **Arreglos para que la copia no arrastre cosas tuyas:**
-  - la plantilla de perfil ya no trae "AI Engineer" en Indeed y Get on Board;
-  - el test de empresas ya no lee tu `companies.json`;
-  - `.env.example` habla de Gemini;
-  - desinstalar con "BORRAR TODO" también borra los CV extra y la lista de
-    empresas.
+**Su Claude** trabaja cada pedido en una rama `cambio/xxx`, corre los tests y
+recién ahí une a `main` y sube. Para deshacer usa `git revert`.
 
-### Cómo guarda los cambios su Claude
+**Paso a paso.** La máquina, una vez:
 
-Ella no maneja nada de esto:
+1. Cuenta de GitHub para la persona.
+2. `winget install Git.Git GitHub.cli`.
+3. Claude Code, con **su** cuenta.
+4. Bajar el programa: el ZIP, o clonar y **borrar `.git`**. Antes subí lo último tuyo.
+5. `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\copia-familiar\preparar.ps1`,
+   y después `gh auth login --web` y `gh repo create vacantia --private --source . --push`.
+6. En `profiles\`, borrá los que no son de ella y renombrá el que sirva de base
+   (`isaias.json` → `hermana.json`, con `"name"` y `cv_path` cambiados). **Antes
+   de instalar**, porque se programa una tarea por cada perfil.
+7. `instalar.bat`.
+8. `abrir.bat` → Configuración → *Claves*: Gemini, TinyFish y Telegram, **los de ella**.
 
-```
-main              ← la versión que anda
-  └ cambio/xxx    ← cada pedido. Si los tests pasan, se une a main y se sube a su GitHub.
-```
+Después, desde Mi perfil:
 
-Nunca trabaja directo sobre `main`. Para deshacer un cambio ya unido usa
-`git revert`, que agrega un commit que lo anula sin borrar historial.
+- palabras clave y *Puestos que NO quiero*;
+- sus CV;
+- dónde, modalidad e inglés;
+- empresas y reclutadores;
+- *Qué NO me sirve*, que es lo que más afina el puntaje;
+- su chat de Telegram.
 
-### Paso a paso
+Para usarlo, abre una terminal en la carpeta, escribe `claude` y pide en
+castellano. Si algo salió mal: *"volvé atrás el último cambio"*.
 
-**CONFIGURACIÓN de la máquina.** Lo hacés vos, una vez:
+Falta probar las barandas en la primera copia de verdad: que `push --force`
+quede bloqueado y que `push` pida confirmación.
 
-1. **Cuenta de GitHub** para la persona.
-2. **Git y GitHub CLI.** En su compu: `winget install Git.Git GitHub.cli`.
-3. **Claude Code.** Instalarlo e iniciar sesión con **su** cuenta de Claude.
-4. **Bajar el programa.** El ZIP desde GitHub, o clonar y **borrar la carpeta
-   `.git`**. Antes subí a GitHub lo último tuyo: lo que no esté subido no viene.
-5. **Preparar la copia:**
-   `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\copia-familiar\preparar.ps1`.
-   Pide nombre y mail si git no los tiene, y al final muestra los dos comandos
-   para subirla a su GitHub:
-   - `gh auth login --web`: abre el navegador, sin claves SSH;
-   - `gh repo create vacantia --private --source . --push`.
-6. **Perfiles.** En `profiles\`, borrá los que no son de ella y renombrá el que
-   sirva de base. Por ejemplo, `isaias.json` → `hermana.json`, y cambiale
-   adentro `"name"` y `cv_path`. **Antes de instalar:** `instalar.bat` programa
-   una búsqueda automática por cada perfil que encuentra.
-7. **Instalar.** `instalar.bat`.
-8. **Claves.** `abrir.bat` → Configuración → *Claves*: Gemini, TinyFish y el token
-   de Telegram. Son **las de ella**: lo que se gasta sale de su cuenta.
+## 2.33 y 2.34. Mi perfil y Configuración
 
-**PERFIL de la persona.** Lo que se adapta, todo desde Mi perfil:
-
-- Palabras clave y *Puestos que NO quiero*.
-- Sus CV, con el nombre y las palabras de búsqueda de cada uno.
-- Dónde, modalidades e inglés.
-- Empresas que sigue. Tu lista sirve de base: Globant, Accenture y demás también
-  buscan gente de marketing.
-- Reclutadores.
-- Datos personales, sobre todo *Qué NO me sirve*, que es lo que más afina el
-  puntaje.
-- *Mi Telegram*, que ahora está en Configuración: su chat.
-
-### Cómo se usa su Claude
-
-Abre una terminal en la carpeta, escribe `claude` y le pide lo que quiere en
-castellano: *"quiero que me traiga también avisos de Bahía Blanca"*, *"no
-entiendo por qué este aviso tiene 40"*. Su Claude explica qué va a hacer, espera
-el OK, lo hace en una rama, corre los tests y recién ahí lo une.
-
-Si algo salió mal: *"volvé atrás el último cambio"*.
-
-## 2.33. Mi perfil y Configuración, separadas; y borrar un perfil
-
-Mi perfil mezclaba en una sola columna lo que tocás todas las semanas con lo que
-se carga una vez y no se vuelve a mirar. Lo de todos los días quedaba enterrado
-entre claves de API.
-
-### Qué cambió
-
-- **La barra lateral tiene Configuración** (`/configuracion`), al pie, abajo de
-  *Buscar ahora* (ver 2.34).
-- **Mi perfil** (`/datos`): Mis CV, palabras clave, puestos que NO querés, dónde,
-  inglés, empresas y URLs de reclutadores, y datos personales.
-- **Configuración**: claves, chat de Telegram, fuentes, puntaje mínimo, `top_n`,
-  `max_new_per_run`, `max_age_days`, *avisarme aunque no haya ofertas*, crear un
-  perfil y **borrar el perfil**.
-- **El JSON del perfil no cambió.** Sólo cambió qué pantalla edita qué campo.
-- **Borrar este perfil**, al pie de Configuración, con la misma confirmación en el
-  lugar que *Borrar este CV*. Se lleva `profiles/<nombre>.json`, sus CV,
-  `companies-<nombre>.json`, `state/<nombre>/` y la tarea `Vacantia - <nombre>`.
-
-### Decisiones que conviene no deshacer
-
+- **Mi perfil** es lo que tocás seguido: CV, palabras, dónde, inglés, empresas,
+  reclutadores y datos personales.
+- **Configuración** es lo de una vez: claves, Telegram, fuentes, puntajes,
+  antigüedad y crear o borrar un perfil.
 - **Cada pantalla guarda sólo sus campos** (`aplicar_datos` y
-  `aplicar_configuracion`). Un tilde sin marcar no viaja en el formulario, así que
-  "no vino" se lee como "apagado". Eso vale sólo en la pantalla que dibuja el
-  tilde: si Mi perfil leyera las fuentes, guardarlo las apagaría todas. Los tests
-  de `tests/test_configuracion.py` mandan el formulario tal como lo manda el
-  navegador y controlan que la otra mitad del perfil quede igual.
-- **Los campos de texto de Mi perfil se cambian sólo si vinieron.** Un pedido
-  viejo o incompleto no vacía tus palabras ni tus datos.
-- **Pegar URLs de reclutadores no prende la fuente.** Si no existía, se crea
-  apagada: prenderla es de Configuración. Lo mismo al separar la lista de empresas.
-- **"Crear perfil" dejó de ser primario.** Queda un solo primario por pantalla,
-  *Guardar cambios*.
-- **Lo compartido no se borra:** un CV que lee otro perfil, o una lista de empresas
-  que usa otro. Tampoco un `companies.json` que no lleva el nombre del perfil,
-  aunque sólo lo use él. `example` nunca.
-- **El estado se borra primero.** Es lo único que puede fallar a mitad de camino
-  (un archivo abierto por una búsqueda en curso), y si falla el perfil sigue entero.
-- **La tarea programada se consulta antes de sacarla.** Un perfil creado desde la
-  pantalla no tiene tarea hasta reinstalar, y avisar "no pude sacarla" mandaría a
-  buscar un problema que no existe. Si existe y no se deja sacar, el perfil se
-  borra igual y el cartel dice el nombre de la tarea para sacarla a mano.
-- **Después de borrar** vuelve a Configuración del primer perfil que quede. Si no
-  queda ninguno, a la bienvenida, que ahora también muestra los carteles.
-
-### Dos cosas de `DESIGN.md` que no toqué
-
-No lo edito sin que lo pidas, pero quedó desactualizado en dos lugares:
-
-- La estructura de navegación dice `Métricas · Mi perfil`, sin Configuración.
-- *Modales* dice que la confirmación de borrar un perfil es un modal. Se hizo en el
-  lugar, como pediste y como dice `.claude/rules/pantalla.md`.
-
-## 2.34. Mi perfil y Configuración, con menos ruido
-
-Las dos pantallas se leían como un manual: explicaciones sueltas abajo de cada
-campo, un recuadro de catorce renglones para las URLs de reclutadores y los
-tildes de fuentes desparramados.
-
-### Qué cambió
-
-- **Barra lateral:** *Configuración* bajó al pie, abajo de *Buscar ahora*, y entre
-  "Trae avisos de los últimos N días" y el botón hay 10px más de aire. El valor
-  es el token `--estado-aire-boton`, que se sale de la escala de 4 a propósito.
-- **Las explicaciones largas van en el signo de pregunta.** Se fueron todos los
-  "Cómo funciona esto" y queda una línea corta de ayuda por campo.
-- **"Qué página pegar" son tres renglones:** *Sirve* / *Sirve* / *No sirve*, con la
-  dirección de ejemplo y qué es. El porqué está en el signo de pregunta.
-- **El aviso de "tiene que estar tildado"** aparece sólo si la fuente está apagada,
-  con el link a Configuración. Visible siempre, ya no se leía.
-- **Mi perfil:** Dónde e Idioma quedaron en una sola sección.
-- **Configuración se ordena por lo que te preguntás**, no por dónde se guarda:
-  - *Cómo me avisa*: chat, puntaje mínimo, ofertas por aviso, avisar sin ofertas.
-  - *Qué busca*: fuentes, antigüedad, tope por corrida.
-  - *Claves*.
-- **Fuentes en dos listas**, *Portales de empleo* y *Lo que seguís*, con un tilde
-  por renglón y la nota en el signo de pregunta.
-  - Al lado de empresas y reclutadores dice cuántas hay cargadas, con el link para
-    cargarlas: prender una fuente con la lista vacía devuelve cero sin avisar.
-  - Con Bumeran y Zonajobs prendidos juntos, avisa que llegan duplicados.
-- **Crear y borrar perfiles** van en un panel chico aparte: el nombre y el botón en
-  una fila, y abajo el borrado.
-
-### Decisiones que conviene no deshacer
-
-- **"Sirve" va en gris y "No sirve" en rojo.** En este sistema el verde es lo que ya
-  hiciste; el rojo sí corresponde, porque es exactamente el valor equivocado.
-- **La clase es `.cargadas` y no `.dato`.** `.dato` es la tarjeta de métrica, con
-  borde y relleno, y con ese nombre el número salía adentro de una caja.
-- **Una fuente nueva que no esté en `GRUPOS_DE_FUENTES` cae en *Portales*.** Para
-  agregar una fuente sigue alcanzando con sumarla a `FUENTES`.
-
-### Lo que el skill de diseño sugería y no se hizo
-
-Cambiar Inter por otra fuente, agregar grano o ruido al fondo y animaciones de
-entrada. `DESIGN.md` fija Inter y prohíbe lo otro: manda el sistema de la app.
-
-## 2.35. Qué escribiste a mano, en Métricas
-
-En *Por qué descartaste vos*, la barra **Escrito a mano** junta los descartes en
-los que escribiste el motivo en vez de elegirlo de la lista. Decía cuántos eran,
-pero no qué decían, y ahí es donde se ve algo como "se están colando posteos de
-LinkedIn que no son ofertas".
-
-Ahora, debajo del gráfico de motivos, hay otro gráfico de barras con **lo que
-escribiste a mano**: cada frase con cuántas veces la pusiste, de la más repetida a
-la menos. Se ven las 10 primeras y el resto queda en *Ver N más*. Respeta el
-período elegido arriba en Métricas.
-
-### Tres motivos nuevos en el desplegable
-
-Apenas se vieron las frases, quedó claro que la mayoría eran tres ideas escritas
-de siete formas:
-
-| En el desplegable | Lo habías escrito |
-|---|---|
-| **No es una oferta de trabajo** | "No es una oferta laboral" (5), "No era una oferta" (4) |
-| **No era mi puesto** | "No era mi puesto" (3), "No rea mi puesto" (1) |
-| **Pide tecnologías con las que no trabajo** | "No trabajo con esas tecnologias", "Pide tecnologias con las que no trabajo", "Me pide tecnologias con las que no trabajo" (1 cada una) |
-
-**Lo que ya habías escrito se reconoce solo** y pasa a su barra, como pasó con el
-inglés. También entran "no era un empleo" y "No es mi puesto", que es como lo
-escribió papá tres veces. Quedan a mano "Es un puesto Jr y yo solo busco SR" y
-"Java no está en mi stack".
-
-### Cómo viene funcionando, con gráfico
-
-Arriba de todo en esa sección hay columnas con **las ofertas nuevas de cada día,
-de las últimas dos semanas**. Un día en cero puede pasar; varios seguidos es que
-algo dejó de andar. La tabla de la última búsqueda sigue abajo. Si las dos
-semanas están enteras en cero no dibuja nada: lo dice con una frase, que avisa más
-fuerte que catorce columnas grises.
-
-### Decisiones que conviene no deshacer
-
-- **Se agrupa sin mirar mayúsculas, tildes, espacios de más ni el punto final.**
-  Más que eso no se interpreta: dos frases distintas que dicen lo mismo quedan en
-  dos filas. Cuando una idea se repite, su lugar es el desplegable.
-- **Los patrones que reconocen lo viejo son angostos** ("no es una oferta" y no
-  "no es"): una frase mal clasificada desaparece de las frases a mano y ya no se ve.
-- **Las que elegiste de la lista no aparecen** entre las frases, aunque además
-  hayas escrito algo: ya tienen su barra y se contarían dos veces.
-- **Los tres motivos nuevos sí enseñan**, a diferencia de inglés, presencial y
-  caso especial: el día que el puntaje aprenda de los descartes, "no es una
-  oferta" es justo lo que tiene que mandar al cero.
-- **El gráfico de días sale del historial del perfil, no del registro.** El
-  registro lo comparten todos los perfiles y los tests: hoy tenía una sola
-  búsqueda real y varias de mentira del perfil "test".
-- **Las frases a mano van siempre en barras**, aunque sean dos. Los otros
-  desgloses pasan a tabla con menos de tres filas; éste no, para que se lea igual
-  que el gráfico de motivos que tiene arriba.
-
-## 2.36. De cuántas: las barras de descartes, contra el total
-
-Veías *Piden inglés 51* y *No es una oferta de trabajo 9*, pero no de cuántas. La
-barra más larga salía siempre llena porque cada gráfico se medía contra su propia
-fila más grande. Así, 9 se dibujaba igual si habías descartado 60 que si habías
-descartado 200, y en un caso es muchísimo y en el otro no es nada.
-
-### Qué cambió
-
-- **Arriba del gráfico dice el total:** *De las 84 que descartaste. La barra
-  entera son las 84.* Respeta el período elegido en Métricas.
-- **Cada barra se llena en proporción a ese total**, y al lado del número va qué
-  parte es: *51 · 61%*, *9 · 11%*.
-- **Las frases escritas a mano se miden contra el mismo total**, no contra la suma
-  de lo escrito. "2 de 4 escritas a mano" parece la mitad de algo, y de 84
-  descartes es casi nada.
-- **Con uno o dos motivos también va en barras.** Los otros desgloses pasan a
-  tabla con pocas filas, pero acá la pregunta es qué parte del total es, y la
-  tabla no lo muestra.
-
-### Decisiones que conviene no deshacer
-
-- **Una que existe nunca dice 0%**: dice *<1%*. Un 0% al lado de un 1 se lee como
-  un error de cuentas.
-- **Sólo este panel usa el total.** *Lo que descartó el sistema* no puede: una
-  oferta cae por idioma y por lugar a la vez, las filas suman más que las
-  ofertas, y los porcentajes darían más de 100.
-- **La pestaña Descarté sigue igual**, midiendo contra la barra más larga. Ahí el
-  total ya está escrito en grande arriba del gráfico.
-
-## 2.37. De cuántas, en todo Métricas; y dónde se consigue cada clave
-
-### Qué te están pidiendo y De dónde vienen
-
-Tenían el mismo problema que los descartes: *Python 161* y *Amazon Web Services
-45* no decían de cuántas, así que no se sabía si AWS había que aprenderlo o era
-un bueno de tener.
-
-- **Qué te están pidiendo** dice *De las N ofertas analizadas* y mide cada barra
-  contra ese total. Las que todavía no pasaron por el analizador no cuentan en
-  el total, porque no tienen nada que pedir, y siguen avisadas al pie.
-- **De dónde vienen** dice *De las N ofertas que entraron* y lo mismo por portal.
-- Los tres paneles lo decían con el mismo renglón. En la 2.38 ese renglón pasó a
-  ser el número grande de la cabecera.
-- **Un aviso puede pedir varias cosas**, así que en *Qué te están pidiendo* los
-  porcentajes no suman 100 y no tienen por qué. Cada uno contesta "en qué parte
-  de los avisos aparece esto".
-
-### Configuración: los links de las claves
-
-- **Abajo de cada clave** dice *Sin cargar. Conseguila en…* o *Cargada: ab…yz.
-  Se saca en…*, con el link: @BotFather, Google AI Studio, TinyFish y OpenRouter.
-  Abren en otra pestaña para no perder lo escrito en el formulario.
-- **El token de Telegram** tiene el paso a paso en el signo de pregunta: abrí
-  @BotFather, `/newbot`, un nombre y un usuario que termine en *bot*.
-- **Mi chat de Telegram** tiene el link a @userinfobot, que te contesta tu Id en
-  un mensaje. El signo de pregunta avisa que antes hay que escribirle al bot
-  propio: un bot no puede mandarle mensajes a alguien que nunca le habló.
-
-### Decisiones que conviene no deshacer
-
-- **@userinfobot es un bot de terceros.** Lo único que hace es decirte tu número,
-  pero si preferís no usarlo, el camino oficial con `getUpdates` sigue en el
-  README.
-- **Las direcciones salen de `.env.example`**, salvo la de Gemini, que va directo
-  a la página de claves de AI Studio. Si algún sitio cambia de dirección, están
-  todas juntas en `DONDE_SE_SACA`, en `formulario.py`.
-
-## 2.38. Métricas: los números que no cerraban
-
-Dos cosas no se entendían.
-
-**Arriba, "¿230 qué?"** Se veían 10 aplicadas, 84 descartadas, 4 archivadas y
-"230 en total", y la suma no daba. Faltaban **las 132 que sacó el filtro**, que no
-tenían tarjeta. Con tu historial del 13/9/2026 queda:
-
-| sin mirar | aplicaste | descartaste | archivadas | las sacó el filtro | ofertas en total |
-|---:|---:|---:|---:|---:|---:|
-| 0 | 10 | 84 | 4 | 132 | 230 |
-
-Debajo va la cuenta escrita: *Cada oferta que entró está en una sola de estas
-tarjetas: 0 + 10 + 84 + 4 + 132 = 230.*
-
-**En los bloques, "¿219 de dónde?"** El total iba como una frase más ("De las 219
-ofertas analizadas. La barra entera son las 219.") y se perdía entre la
-explicación y el gráfico. Ahora cada bloque tiene una cabecera con dos lados:
-
-- **A la izquierda:** el título y la explicación.
-- **A la derecha, en grande:** el total contra el que se miden las barras, y qué
-  es. En pantalla angosta baja abajo del título.
-
-| Bloque | El número de la derecha |
-|---|---|
-| Qué te están pidiendo | **219** ofertas analizadas, *de las 230 que entraron* |
-| Qué tan bien te encajan | **230** ofertas puntuadas |
-| Por qué descartaste vos | **84** descartaste |
-| Lo que descartó el sistema | **132** sacó el filtro |
-| De dónde vienen | **230** ofertas que entraron |
-
-Las 219 son las de esas 230 que ya pasaron por el analizador de habilidades. Las
-otras 11 entran solas en la próxima búsqueda, y el pie del gráfico lo sigue
-diciendo.
-
-### Decisiones que conviene no deshacer
-
-- **La cuenta de arriba se escribe sólo si cierra.** Una oferta archivada que
-  además está marcada contaría en dos tarjetas, y una suma que no da es peor que
-  ninguna.
-- **Qué tan bien te encajan cuenta desde siempre**, no el período elegido.
-  Cuando elegís otro período, abajo del número dice *desde siempre*, para que no
-  parezca que no coincide con el resto.
-- **Un solo lugar arma la cabecera** (`_cabecera` en `render.py`), y lo usan el
-  bloque destacado y los cuatro paneles. **Si agregás un bloque a Métricas, pasale
-  el total**: sin él la cabecera queda sin número y vuelve la pregunta de "¿de
-  cuántas?".
-
-
-## 2.39. El panel de "Buscando trabajo"
-
-Apretabas **Buscar ahora** y no pasaba nada visible. Pasaba, en realidad: al pie
-de la barra lateral el texto cambiaba de *Buscar ahora* a *Buscando en
-Getonbrd*. Pero eso es cuerpo 12, gris, al costado de lo que estás mirando. Tus
-palabras: *"ese texto ahí no es muy visual que digamos"*. Arrancar una búsqueda
-que tarda tres minutos y que la pantalla no te devuelva nada se siente igual que
-apretar un botón roto, y terminás apretándolo de nuevo.
-
-Ahora, arriba del contenido y en cualquier pantalla donde estés:
-
-    ┌──────────────────────────────────────────────────────────────┐
-    │  ◜◝  Buscando trabajo                         hace 1 minuto  │
-    │                                                              │
-    │  Puntuando contra tu CV                                      │
-    │  ███████████████████░░░░░░░░░░░░░░░░░░░░░░░░░     39 de 78   │
-    │                                                              │
-    │  ✓ Portales   ✓ Revisión   ● Puntaje   ○ Filtros             │
-    │                                                              │
-    │  Seguí usando la pantalla: cuando entren ofertas nuevas,     │
-    │  te avisa acá.                                               │
-    └──────────────────────────────────────────────────────────────┘
-
-Los cuatro tramos son las etapas del motor, en orden. El tilde es lo que ya
-pasó, el punto lleno es dónde está ahora. Cuando la búsqueda termina, el panel
-desaparece solo.
-
-El cartel chico del pie sigue donde estaba, y no es repetido: **el panel es el
-estado de esta búsqueda mientras dura, y el pie es el botón que la arranca**,
-al lado del "última búsqueda hace 6 horas" que le da sentido.
-
-### Decisiones que conviene no deshacer
-
-- **El panel va adelante; el cartel del pie, quieto.** `DESIGN.md` dice que nada
-  parpadea ni se actualiza solo, y para el cartel del pie eso sigue siendo
-  correcto: vive al costado del campo visual, y algo que se mueve ahí te obliga
-  a mirarlo cada vez que trabajás. El panel está adelante, en la columna que ya
-  estás mirando, y dura lo que dura la búsqueda y ni un segundo más. Si alguna
-  vez querés mover el panel a la barra lateral, ese es el motivo para no
-  hacerlo.
-
-- **Un solo pedido cada dos segundos actualiza los tres lugares:** el cartel del
-  pie, el panel de arriba y el aviso de "entraron ofertas nuevas". El pedido lo
-  hace el cartel del pie, y los otros dos vuelven en la misma respuesta marcados
-  con `hx-swap-oob`. Si agregás un cuarto lugar, colgalo de ahí y no de un reloj
-  nuevo.
-
-- **El panel vuelve siempre, aunque vacío.** Es el único pedazo de la pantalla
-  que tiene que poder *desaparecer* solo, y para que el reemplazo lo alcance el
-  contenedor tiene que estar ahí. Si volviera nada, quedaría clavado hasta que
-  alguien recargue. El CSS lo saca del layout con `:empty`.
-
-- **La barra no inventa un porcentaje.** Se llena de verdad sólo durante el
-  puntaje, que es la única etapa donde se sabe el total. En las demás recorre de
-  punta a punta sin prometer cuánto falta.
-
-- **El resplandor de la barra nunca se va de la barra.** La primera versión era
-  un bloque que entraba por la izquierda y salía por la derecha, y medio ciclo
-  la barra quedaba vacía: en una barra de mil píxeles eso se veía como una
-  astilla en un rincón, o sea igual a una barra rota.
-
-- **El tiempo va en minutos enteros, no en segundos.** El segundero corriendo al
-  lado de una barra que no avanza es lo que hace que cinco minutos se sientan
-  veinte.
-
-- **Los tramos salen de `corrida.ETAPAS`**, que es el orden del pipeline del
-  motor, y no de una lista escrita en `render.py`. Si el motor gana o pierde una
-  etapa, se toca en un solo lado.
-
-- **La etapa es un identificador aparte de la oración.** La oración cambia con
-  la fuente y con el número de ofertas (*Buscando en Getonbrd*, *Revisando 125
-  ofertas*); el identificador (`fuentes`, `revisando`, `puntuando`, `filtrando`)
-  no cambia nunca. Es lo que le permite al panel saber qué tramo ya pasó sin
-  adivinarlo del texto.
-
-- **El `role="status"` lo lleva el cartel del pie y no el panel.** Los dos dicen
-  la misma oración y los dos se reemplazan cada dos segundos: con la etiqueta en
-  los dos, un lector de pantalla canta *"Puntuando contra tu CV"* dos veces cada
-  dos segundos durante toda la búsqueda.
-
-**Dónde está:** `panel_de_busqueda()` en `vacantia/ui/render.py`, los estilos en
-`vacantia/ui/css/buscando.css`, y las etapas en `vacantia/ui/corrida.py`.
-
+  `aplicar_configuracion`). Un tilde sin marcar no viaja en el formulario: si Mi
+  perfil leyera las fuentes, las apagaría todas. Los tests de
+  `tests/test_configuracion.py` lo cuidan.
+- **Borrar un perfil** se lleva su JSON, sus CV, sus empresas, `state/<nombre>/`
+  y la tarea programada. Lo compartido con otro perfil no se borra.
+- `DESIGN.md` quedó desactualizado en dos cosas que no toqué: no nombra
+  Configuración, y dice que borrar es un modal (se hizo en el lugar).
+
+## 2.40. Computrabajo repetía ofertas
+
+El 17/9/2026 el mismo aviso entró ocho veces. Kaizen republica con URLs
+distintas, y Computrabajo había cambiado la página: el lector dejó de leer
+título y empresa, y sin empresa no corre el control por empresa + título.
+
+Se arregló en `extraer_computrabajo`:
+
+- el título es el primer `#` de nivel 1;
+- la empresa se corta en el **último** " - ".
+
+El historial se reparó; el respaldo quedó en
+`state/isaias/*.bak-computrabajo-20260917-120122.json`.
+
+## 2.41. Aprende de lo que marcás
+
+- **Ejemplos en el prompt:** cada lote lleva tus últimos 12 descartes y 6
+  aplicadas (`vacantia/aprendizaje.py`), unos 1.200 tokens. No entran inglés,
+  presencial ni caso especial.
+- **`is_job_offer`:** si el modelo dice que no es oferta, el **código** fuerza el
+  0. Con el prompt solo, un posteo con 70 llegaba igual a Telegram.
+- **Tecnologías que NO uso,** en Mi perfil: `.NET`, `Java` y `C#`. La "o" la
+  juzga el modelo ("Java o .NET" se va; "Python o Java" entra). El filtro
+  confirma al leer que la tecnología siga en tu lista, así que sacar una
+  devuelve esas ofertas sin re-puntuar.
+- **Todo lo que saca va a Filtradas**, donde se puede marcar *Mal descartada*.
+
+## 2.43. Nivel mínimo, Archivar a la vista y el Enter que aplicaba
+
+El 25/9/2026 dijiste que seguía sin aprender. Mirando tu historial:
+
+- **Archivar, a la vista en cada tarjeta**, en fantasma: es "no le doy bola",
+  por la razón que sea. Vivía escondido en el menú de tres puntos como *Ya no
+  está*, que además lo achicaba a los avisos vencidos. Es la única excepción a
+  la regla de dos controles.
+- **"semi senior no acepto" quedó guardada como APLICADA.** Enter en el campo del
+  motivo manda el formulario con el primer botón, que es *Apliqué*: el sistema
+  aprendió que te gustan las Semi Senior. Ahora Enter descarta (`app.js`), y el
+  servidor trata "Apliqué + motivo escrito" como descarte. Esa oferta ya se
+  corrigió en tu historial (copia en `state/isaias/job_history.bak-aplicada-por-enter-20260925.json`).
+- **Nivel mínimo del puesto**, en Mi perfil (`filters.seniority_minima`). El
+  tuyo quedó en Senior. Mira primero el título ("SSR", "Semi Senior", "Jr",
+  "Practicante"; "SSr/Sr" entra porque te acepta) y, si no dice nada, el nivel
+  que devuelve el modelo. Se calcula al leer, así que ya sacó las Semi Senior
+  que tenías sin marcar. Va a *Filtradas* como "Es para un nivel menor".
+- **Los ejemplos del prompt llevan el stack.** "Pide tecnologías con las que no
+  trabajo" no decía cuáles; ahora el modelo ve, por ejemplo, `PHP, Laravel`.
+- **Tecnologías: la lista manda.** Sólo filtra lo que está en *Tecnologías que
+  NO uso*. Hoy tenés `.NET, Java, C#`; si te llegan PHP, Scala o Go, sumalas ahí.
+
+## 2.42. Jev: probado y descartado por ahora
+
+El 22/9/2026 se probó **Jev** (TypeSafe AI), un modelo que no escribe texto:
+contesta preguntas cerradas (sí o no, elegir una opción, un puntaje) con qué tan
+seguro está. Se llamó por el AI Gateway de Vercel (`typesafe-ai/jev`), que es
+gratis hasta el 25/9, con `AI_GATEWAY_API_KEY` en `.env`.
+
+**Cómo se probó:** a 110 ofertas de tu historial con marca tuya se les hicieron
+las mismas preguntas cerradas que hoy le hace el prompt a Gemini. Se comparó
+contra tu marca y contra lo que Gemini había guardado. No se tocó el motor, y el
+script ya se borró.
+
+| Pregunta | Gemini | Jev |
+|---|---|---|
+| Pide inglés (52 descartes tuyos) | 41 (79%) | 46 (88%) con corte en 0.5 |
+| Pide inglés, pero aplicaste igual (12) | 1 error | 2 con corte en 0.5; **0 con corte en 0.8** |
+| No es oferta (17) | 10 | 9 |
+| Tecnologías que no usás (11) | — | 6, sin errores en las que aplicaste |
+| Encaje: separa aplicadas de "no era mi puesto" | 0.93 | 0.90 |
+
+- **Decide igual que Gemini, no mejor.** La ventaja en inglés está inflada: lo
+  que Gemini ya filtraba nunca te llegó, así que esos descartes son justo los
+  que se le escaparon.
+- **La confianza sí sirve.** Por encima de 0.8 no se equivocó nunca con lo que
+  aplicaste; los errores estuvieron entre 0.5 y 0.8.
+- **Los puntajes salen más bajos** (48 contra 73 en lo que aplicaste). Si se
+  usara, habría que recalibrar `min_score`.
+- **No escribe texto:** motivo, stack y ciudad los seguiría haciendo Gemini.
+- **Es rápido y barato:** 0.5 s por oferta y US$ 0.013 las 110. Pero Gemini ya es
+  gratis y el cuello de botella no es el modelo.
+- **Es inestable:** con 4 pedidos en paralelo, 14 de 83 volvieron con "alta
+  demanda del proveedor".
+- **Algunas marcas tuyas parecen discutibles:** 3 de tus "no es oferta" parecen
+  ofertas reales ("Estamos contratando!!! buscamos desarrolladores", Sawy). Jev
+  les dio 0.97.
+
+**Si algún día se retoma:** usar Jev sólo como segunda opinión para "pide
+inglés" y "tecnologías", y mandar a la pantalla lo que caiga entre 0.5 y 0.8 en
+vez de descartarlo. Gemini seguiría con todo lo de texto. El endpoint es
+`POST https://ai-gateway.vercel.sh/typesafe/v1/systemone`, con `state` y
+`questions` (tipos `noul`, `choice` y `score`).
 
 ---
 
-# 3. LO QUE YA ESTÁ HECHO
+# 3. DESCARTADO A PROPÓSITO
 
-Sin detalle, para no volver a discutirlo:
-
-- **La pantalla local** (`abrir.bat`): barra lateral con Trabajos, Métricas, Mi
-  perfil y Configuración, y el estado del sistema fijo al pie. Oscura, navegable con teclado,
-  usable en celular.
-- **Marcar ofertas**, con motivo obligatorio al descartar. Al
-  marcarla se va de *Sin marcar* con una animación, y el cartel de arriba la
-  nombra: con dos ofertas de 90 pegadas no se notaba cuál había desaparecido.
-- **Archivar** los avisos vencidos, de a uno o todos los de más de N días, sin
-  ensuciar lo que el sistema aprende de tus descartes (2.17).
-- **Apliqué y Descarté sirven para revisar**: ordenadas por cuándo las marcaste,
-  con la fecha en la tarjeta. Para cuando te llaman y no te acordás a qué
-  empresa le mandaste el CV.
-- **Ordenadas por puntaje y de a 20 por página**, con las recién publicadas
-  arriba de todo. Ordenar sólo por fecha abría la lista con lo peor: las que
-  puntúan 0 son las que no son para vos, y si entraron hoy quedaban primeras.
-  Por eso a la banda de recientes sólo suben las que llegan a tu puntaje mínimo.
-- **Aviso de ofertas nuevas sin apretar F5**: si entra una corrida con la
-  pantalla abierta, aparece un cartel abajo y vos decidís cuándo actualizar. En
-  todas las pantallas, no sólo en Trabajos (2.26).
-- **Se ve en qué anda la búsqueda mientras corre**: qué fuente, cuántas
-  recolectó, cuántas lleva puntuadas. Al pie de la barra lateral, sin
-  recargar la página (2.26).
-- **El CSS y el JavaScript son archivos de verdad**, no strings de Python, y la
-  pantalla se actualiza de a pedazos con htmx en vez de recargarse entera
-  (2.26).
-- **Qué habilidades te piden los avisos**, en Métricas. Sale de lo que el modelo
-  ya devolvía al puntuar, así que no cuesta una llamada extra, y sirve para
-  cualquier oficio porque no hay ninguna lista de tecnologías en el código
-  (2.27).
-- **El cartel de arriba de Trabajos cambia con la pestaña**: el total en Sin
-  marcar, sólo las de la lista en Apliqué, y los motivos en Descarté (2.27).
-- **Métricas en dos columnas y el contenido al 85% del ancho**, en vez de un
-  tope de 1200px que dejaba medio monitor vacío a la derecha (2.27).
-- **Métricas ordenada en capítulos**: los números arriba, qué te piden destacado,
-  los desgloses abajo, y el estado del programa aparte al pie (2.27).
-- **Más de un CV por perfil**, cada uno con sus búsquedas, y cada oferta dice cuál
-  mandar (2.29).
-- **Cada perfil con su propio archivo de empresas**: guardar la lista de uno ya no
-  puede pisar la de otro (2.30).
-- **Filtro por antigüedad del aviso**: hoy, 7 días, 30 días, sin filtro. Lee las
-  cuatro formas distintas en que los portales escriben la fecha.
-- **Cartel de cuántas ofertas se pierden por no saber inglés**, con cuánto
-  puntuaba la mejor. Baja solo si subís tu nivel en Mi perfil.
-- **Fuentes**: páginas de empleo de empresas, LinkedIn Jobs, publicaciones de
-  LinkedIn vía buscador, Bumeran, Zonajobs, Computrabajo, y reclutadores que
-  seguís. Los tres portales argentinos verificados contra los sitios.
-- **Seguir a un reclutador de LinkedIn** aunque LinkedIn no deje leer su perfil:
-  se buscan sus publicaciones en Google y se leen ésas (2.7).
-- **Antigüedad máxima, una sola perilla en Configuración**, que heredan todas las
-  fuentes. Los tres portales ahora sí reportan cuándo se publicó el aviso, que
-  antes no lo hacían nunca (2.8).
-- **Las recién publicadas van arriba de todo**, separadas con un rótulo, sin
-  tocar el puntaje: a las de hoy se postuló menos gente (2.8).
-- **Scoring con Gemini** leyendo tu CV contra cada aviso, con cadena de modelos
-  de respaldo.
-- **Regla de ubicación** (2.1) y filtro de idioma.
-- **Descarte antes del scoring** por título y por país, para no pagar por
-  puntuar lo que ya se sabe que no sirve (2.16).
-- **Duplicados**: por URL, por empresa más título, y entre fuentes distintas.
-- **Vacantes ya cubiertas** se descartan antes de gastar una llamada al modelo.
-- **Multi-perfil**: cada persona su perfil, su CV, su Telegram y su horario.
-  `instalar.bat` reparte los horarios y programa las tareas de Windows.
-- **Modo consejo**: qué reordenar del CV para un aviso. No lo reescribe nunca.
-- **Mensajes para el reclutador**, DM y mail, calcados de los que ya funcionaban:
-  el modelo arma la lista de requisitos leyendo el aviso contra el CV, y el
-  cierre sale del día de la semana (2.4).
-- **Notificación por Telegram**, con aviso opcional cuando no hubo nada.
-
-**Descartado a propósito:**
-
-- **CV en PDF**: salía feo. Se borró todo. El CV en Markdown sigue en `resume/`
-  y se edita desde la pantalla. No volver a construirlo sin acordarse de esto.
-- **Recolección compartida entre hermanos**: cada uno en su compu, todo aislado.
-  Además es lo que hace que LinkedIn no bloquee, porque cada casa aporta su
-  propia IP residencial.
-- **Hosting en un servidor**: empeora lo de la IP. Una IP de datacenter es justo
-  el rango que LinkedIn filtra primero.
-
----
+- **CV en PDF:** salía feo y se borró. El CV es Markdown en `resume/`. No volver
+  a construirlo sin acordarse de esto.
+- **Recolección compartida o en un servidor:** cada casa aporta su propia IP
+  residencial, y eso es lo que evita que LinkedIn bloquee. Una IP de datacenter
+  es lo primero que filtra.
+- **Apify** (2.28) y **Jev** (2.42), por ahora.
+- **Que un país deducido no pueda filtrar solo:** se midió, y las 4 ofertas que
+  habría devuelto estaban bien deducidas (España y Chile).
 
 # 4. IDEAS, NO PENDIENTES
 
-- **Que las ofertas lleguen por mail** además de por Telegram, para tu viejo. El
-  motor ya tiene la interfaz `Notifier` lista (`vacantia/notifiers/`): agregar un
-  canal es un archivo, no tocar el motor.
+- **Ofertas por mail** además de Telegram, para papá: es un archivo nuevo en
+  `vacantia/notifiers/`, sin tocar el motor.
 - **Reescribir el `README.md`** como guía de instalación para cada persona.
-- **Apuntar al mercado de afuera** el día que el inglés deje de ser un problema.
-  Hoy el 74% de lo que junta el sistema muere en ese filtro (2.28). Cuando eso
-  cambie, lo que hay que tocar es `filters.language`, la ubicación y las palabras
-  clave; el resto del sistema no se entera. Ahí sí volvería a tener sentido mirar
-  un scraper pago para volumen, y en 2.28 están los números para decidirlo.
-
-> El filtro **"sólo las que puedo tomar" ya está hecho** y salió de esta lista:
-> lo que el sistema descarta por idioma o lugar no ensucia *Sin marcar*, se va a
-> la pestaña **Filtradas** (2.21). Medido el 8/9/2026, antes de eso eran 31 de
-> 41 avisos en la lista sobre los que el sistema ya había decidido.
-
----
+- **Apuntar al mercado de afuera** cuando el inglés deje de ser un problema. Se
+  toca `filters.language`, la ubicación y las palabras clave (2.28).
 
 # 5. LOS ARCHIVOS
 
-Los tres `.bat` son todo lo que tocan las personas que no programan:
-
-| Archivo | Para qué | Cuándo se usa |
+| Archivo | Para qué | Cuándo |
 |---|---|---|
-| `instalar.bat` | Instala todo y programa las búsquedas automáticas | Una vez al principio, y de nuevo cada vez que agregues un perfil o muevas la carpeta |
-| `abrir.bat` | **La pantalla**: todo lo demás | Todos los días |
-| `desinstalar.bat` | Deja de buscar y borra el programa. Pregunta aparte si borrar los datos | Cuando consiguieron trabajo |
+| `instalar.bat` | Instala y programa las búsquedas | Una vez, y de nuevo al agregar un perfil o mover la carpeta |
+| `abrir.bat` | La pantalla | Todos los días |
+| `desinstalar.bat` | Deja de buscar y borra el programa; pregunta aparte por los datos | Cuando consiguieron trabajo |
 
-Eran cinco. `buscar_ahora.bat` y `estado.bat` se borraron: son un botón y una
-sección adentro de la pantalla (2.19). Cada `.bat` menos es una cosa menos que
-explicarle a alguien que no programa, y una ventana negra menos abriéndose.
-
-El resto:
-
-| | |
-|---|---|
-| `README.md` | La documentación técnica |
-| `NOTAS-PARA-ISAIAS.md` | Este archivo |
-| `companies.json` | Las empresas que sigue la fuente `careers`. Se edita desde la pantalla |
-| `.env` | Las claves. Se edita desde la pantalla. **No se sube a git** |
-| `.env.example` | El molde del `.env`, sin claves |
-| `requirements.txt` | Lo que instala `instalar.bat` |
-| `requirements-dev.txt` | pytest. Sólo para vos |
-| `conftest.py` | Deja que los tests encuentren el paquete |
-| `vacantia.log` | Todo lo que pasó. Es lo primero que hay que mirar cuando algo falla |
-| `profiles/` `resume/` `state/` `output/` | Perfiles, CVs, ofertas guardadas y documentos generados |
-| `vacantia/` `tests/` `scripts/` | El programa, sus pruebas, y los scripts de PowerShell que usan los `.bat` |
-
-Dónde está cada cosa del código:
-
-```
-vacantia/
-├── agenda.py         reparto de horarios entre perfiles
-├── consejo.py        qué reordenar del CV (no lo reescribe)
-├── fechas.py         leer el 'posted_at' de cada portal (4 formatos)
-├── mensajes.py       moldes de DM y mail (borradores)
-├── filters.py        la regla de ubicación, modalidad e idioma
-├── scoring.py        el prompt que puntúa cada aviso contra el CV
-├── llm.py            la cadena de modelos y sus errores
-├── ui/
-│   ├── server.py     el servidor y las rutas
-│   ├── data.py       todo lo que toca disco
-│   ├── formulario.py las pestañas Mi perfil y Configuración
-│   ├── render.py     el HTML
-│   ├── estilos.py    junta los .css de abajo y arma las @font-face
-│   ├── css/          el CSS, en archivos de verdad
-│   │   ├── tokens.css     los tokens de DESIGN.md, una sola vez
-│   │   ├── base.css       elementos sueltos
-│   │   ├── shell.css      el marco: barra lateral y estado del sistema
-│   │   ├── controles.css  botones y campos
-│   │   ├── piezas.css     los componentes
-│   │   ├── buscando.css   el panel de "Buscando trabajo"
-│   │   ├── graficos.css   las barras de Métricas
-│   │   └── linkedin.css   el constructor de URLs
-│   ├── static/
-│   │   ├── app.js         lo poco que htmx no cubre
-│   │   └── htmx.min.js    servido por la app, nunca desde un CDN
-│   └── corrida.py    buscar ahora, en qué anda, y cómo viene funcionando
-└── sources/
-    ├── rrhh_profiles.py   seguir reclutadores por URL
-    ├── portales_ar.py     Bumeran / Zonajobs / Computrabajo
-    ├── indeed.py          Indeed AR (Cloudflare: ver 2.22)
-    └── getonbrd.py        Get on Board, por su API publica
-```
+`vacantia.log` es lo primero que hay que mirar cuando algo falla. `.env` tiene
+las claves y no se sube a git. La arquitectura del código está en
+`.claude/rules/proyecto.md` y en el `README.md`.
