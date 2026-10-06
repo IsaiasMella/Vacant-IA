@@ -1,10 +1,10 @@
 # Notas para Isaías
 
-**649 tests pasan.**
+**651 tests pasan.**
 
 ```
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.venv\Scripts\python.exe -m pytest tests -q      →  649 passed
+.venv\Scripts\python.exe -m pytest tests -q      →  651 passed
 ```
 
 Andando todo: los 3 portales argentinos, Indeed, Get on Board, LinkedIn Jobs,
@@ -414,6 +414,20 @@ El 25/9/2026 dijiste que seguía sin aprender. Mirando tu historial:
   trabajo" no decía cuáles; ahora el modelo ve, por ejemplo, `PHP, Laravel`.
 - **Tecnologías: la lista manda.** Sólo filtra lo que está en *Tecnologías que
   NO uso*. Hoy tenés `.NET, Java, C#`; si te llegan PHP, Scala o Go, sumalas ahí.
+
+## 2.44. El error 10053 de la ventana no era un error
+
+El 6/10/2026 la ventana de `abrir.bat` mostró dos tracebacks con
+`ConnectionAbortedError: [WinError 10053]` mientras corría una búsqueda.
+
+- **Qué era:** el cartel de la corrida pregunta cada 2 segundos cómo va. Si
+  cambiás de pestaña o apretás F5 justo en ese momento, el navegador corta el
+  pedido a la mitad, y Windows avisa con ese error al querer contestarle.
+- **Por qué parecía grave:** el servidor lo trataba como un bug. Lo anotaba como
+  ERROR y además intentaba mandar la página de "Algo falló" por la misma
+  conexión cortada, que volvía a fallar. De ahí el segundo traceback.
+- **Ahora:** un corte del navegador se suelta en silencio (`Handler.handle` en
+  `vacantia/ui/server.py`). Los bugs de verdad siguen saliendo como antes.
 
 ## 2.42. Jev: probado y descartado por ahora
 

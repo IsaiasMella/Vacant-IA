@@ -141,6 +141,8 @@ class Handler(BaseHTTPRequestHandler):
         except FileNotFoundError as e:
             return self._pagina("Error", render.avisos([("error", str(e))]), perfil,
                                 "trabajos", 404)
+        except ConnectionError:         # el navegador se fue: lo ataja handle()
+            raise
         except Exception as e:          # que un bug no deje la página en blanco
             logger.exception("[ui] Error sirviendo GET %s", self.path)
             return self._pagina("Error", render.avisos([("error", f"Algo falló: {e}")]),
@@ -506,6 +508,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._post_borrar_perfil(form)
         except (ValueError, FileNotFoundError) as e:
             return self._redirigir(_pantalla_del_post(ruta), perfil=perfil, error=str(e))
+        except ConnectionError:         # el navegador se fue: lo ataja handle()
+            raise
         except Exception as e:
             logger.exception("[ui] Error procesando POST %s", self.path)
             return self._redirigir(_pantalla_del_post(ruta), perfil=perfil,
@@ -777,6 +781,28 @@ class Handler(BaseHTTPRequestHandler):
                             error="No encontré esa oferta en el historial.")
 
     # --- ruido ----------------------------------------------------------
+
+    def handle(self) -> None:
+        """Si el navegador corta la conexión a mitad de respuesta, no es un error.
+
+        Pasa al cambiar de pestaña o apretar F5 justo cuando el cartel de la
+        corrida estaba preguntando (cada 2 segundos mientras busca). El
+        6/10/2026 eso dejó en la ventana dos tracebacks de `WinError 10053`
+        marcados como ERROR: el `except Exception` de `do_GET` lo trataba como
+        un bug, y encima intentaba mandar la página de "Algo falló" por la
+        misma conexión muerta, que volvía a fallar. Parecía que algo se había
+        roto y no: el pedido siguiente anduvo bien. No hay a quién contestarle,
+        así que se suelta en silencio.
+
+        `ConnectionError` cubre los tres que manda Windows o Linux en este caso:
+        `ConnectionAbortedError`, `ConnectionResetError` y `BrokenPipeError`.
+        Se ataja acá y no sólo en `do_GET` porque también puede pasar fuera de
+        su `try`: sirviendo `htmx.min.js`, en una redirección o leyendo el pedido.
+        """
+        try:
+            super().handle()
+        except ConnectionError:
+            self.close_connection = True
 
     #: Lo que no se anota en el registro aunque se pida mil veces.
     #:

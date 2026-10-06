@@ -2065,3 +2065,38 @@ def test_el_anotador_es_una_sola_pieza_y_solo_el_numero_va_en_verde():
     stepper = CSS[CSS.index(".stepper {"):CSS.index(".apliques .confirmar {")]
     assert "var(--color-success)" in stepper.split(".stepper .numero {")[1]
     assert "var(--color-success)" not in stepper.split(".stepper .numero {")[0]
+
+
+# --- el navegador que corta a mitad de respuesta ----------------------------
+
+@pytest.mark.parametrize("metodo, ruta", [
+    ("_get_corrida", "/corrida?perfil=test"),    # adentro del try de do_GET
+    ("_get_estatico", "/htmx.min.js"),          # afuera del try
+])
+def test_un_navegador_que_corta_no_deja_errores_en_el_registro(
+        sitio, monkeypatch, caplog, capsys, metodo, ruta):
+    """El 6/10/2026 cambiar de pestaña mientras el cartel de la corrida
+    preguntaba dejó dos tracebacks de `WinError 10053` marcados como ERROR.
+    Parecía que algo se había roto, y no: el pedido siguiente anduvo bien.
+
+    Se simula con el método que arma la respuesta tirando el mismo error que
+    tira Windows al escribir en una conexión que el navegador ya cerró.
+    """
+    import logging
+
+    base, _ = sitio
+
+    def corta(self, *args, **kwargs):
+        raise ConnectionAbortedError(10053, "Se ha anulado una conexión establecida")
+
+    with caplog.at_level(logging.DEBUG, logger="vacantia"):
+        # `context()` y no `undo()`: undo también deshace el chdir de `sitio`.
+        with monkeypatch.context() as m:
+            m.setattr(Handler, metodo, corta)
+            with pytest.raises(OSError):        # del lado del navegador, sin respuesta
+                get(base, ruta)
+        estado, _, _ = get(base, "/trabajos?perfil=test")
+
+    assert estado == 200                        # el servidor sigue atendiendo
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert "Traceback" not in capsys.readouterr().err
