@@ -657,6 +657,11 @@ Mira **sólo el título**: un aviso de AI Engineer nombra "machine learning" ent
 las tecnologías del equipo todo el tiempo, y descartarlo por eso sería tirar una
 oferta buena.
 
+Se vuelve a aplicar **después** del scoring, sobre el título que extrae el
+modelo. En un posteo de LinkedIn el título de la fuente es el comienzo del texto
+o "Publicación de Fulana", y el puesto de verdad recién lo dice el modelo. Lo
+descartado así va a *Filtradas* como "El título dice un puesto que no hacés".
+
 También se descarta antes lo que la fuente ya dijo que es de otro país. **Sólo
 el país, y a propósito**: un híbrido en tu ciudad tiene que entrar aunque pidas
 sólo remoto, y para saber en qué ciudad es hace falta el dato que completa el
@@ -820,7 +825,7 @@ Las etapas, en orden:
 | `antes_del_llm` | `excluir_titulos`, o la fuente ya dijo un país que no es |
 | `diferida` | el triaje la dejó para la próxima corrida |
 | `puntuada` | pasó por el modelo |
-| `no_es_oferta`, `tecnologias`, `nivel`, `ubicacion`, `modalidad`, `idioma` | los filtros de después del scoring |
+| `no_es_oferta`, `titulo`, `tecnologias`, `nivel`, `ubicacion`, `modalidad`, `idioma` | los filtros de después del scoring |
 | `bajo_umbral` / `supera_umbral` | contra `min_score` |
 | `fuera_del_top` | superó el umbral pero no entró en las `top_n` del aviso |
 | `avisada` / `sin_avisar` | salió por Telegram, o no (dry-run o falló el envío) |

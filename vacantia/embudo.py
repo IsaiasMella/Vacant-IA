@@ -20,7 +20,7 @@ Las etapas cierran como sumas, y por eso se cuentan todas aunque algunas no se
 anoten como descarte:
 
     trajo        = ya_vista + duplicada + cubierta + antes_del_llm + diferida + puntuada
-    puntuada     = (filtros: no_es_oferta … idioma) + bajo_umbral + supera_umbral
+    puntuada     = (filtros: no_es_oferta, titulo … idioma) + bajo_umbral + supera_umbral
     supera_umbral = avisada + fuera_del_top + sin_avisar
 
 `descartada_en_fuente` va aparte de `trajo`: es lo que la fuente encontró y
@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from vacantia.log import get_logger
-from vacantia.models import Job
+from vacantia.models import Job, clave_de_url
 
 logger = get_logger()
 
@@ -49,6 +49,7 @@ ETAPAS = (
     "diferida",
     "puntuada",
     "no_es_oferta",
+    "titulo",
     "tecnologias",
     "nivel",
     "ubicacion",
@@ -65,6 +66,7 @@ ETAPAS = (
 #: inglés por historia; acá van como las lee la persona.
 ETAPA_DEL_FILTRO = {
     "no_es_oferta": "no_es_oferta",
+    "titulo": "titulo",
     "tecnologias": "tecnologias",
     "nivel": "nivel",
     "location": "ubicacion",
@@ -81,13 +83,13 @@ def esta_prendido(profile: dict) -> bool:
 
 
 def _clave_url(url: str) -> str:
-    """La URL entera, con el query string.
+    """La misma clave que `Job.key`, que conserva el id de Indeed (`?jk=`).
 
-    **No** es la normalización de `Job.key`, que corta en el `?`: en Indeed la
-    identidad del aviso está en el query (`viewjob?jk=<id>`), y cortando ahí
-    los 23 avisos sin detalle de una corrida quedaban anotados como uno solo.
+    Hasta que `Job.key` lo conservó, acá se usaba la URL entera: cortando en
+    el `?`, los 23 avisos sin detalle de Indeed de una corrida quedaban
+    anotados como uno solo.
     """
-    return (url or "").strip().rstrip("/").lower()
+    return clave_de_url(url)
 
 
 class Embudo:

@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+import urllib.parse
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Any
@@ -22,6 +23,43 @@ _COMPANY_NOISE = {
     "tech", "solutions", "argentina", "arg", "chile", "uruguay", "mexico",
     "colombia", "peru", "brasil", "brazil", "espana", "spain", "latam",
 }
+
+#: Parámetros de la URL que **son** la identidad del aviso, y no tracking.
+#:
+#: La clave cortaba la URL en el `?` para que `utm_source`, `trk` o `ref` no
+#: hicieran pasar el mismo aviso por nuevo. Pero en Indeed el id va en el query
+#: (`viewjob?jk=<id>`), y cortando ahí todos los avisos de Indeed eran la misma
+#: URL: medido el 16/10/2026, en cinco semanas entró **uno solo** al historial y
+#: el resto se descartó como "ya visto". Revisadas las fuentes ese día:
+#:
+#:   jk, vjk  Indeed (`viewjob?jk=`, y `vjk` en los links del buscador).
+#:   gh_jid   Greenhouse embebido en la página de la empresa
+#:            (`empresa.com/jobs/abiertas?gh_jid=<id>`): la misma forma, y
+#:            `careers` lo acepta como link de aviso.
+#:
+#: LinkedIn Jobs, Get on Board, los portales, Lever, Workday y los posts llevan
+#: el id en la ruta. Una lista cerrada y no "todo menos el tracking" a propósito:
+#: un parámetro de tracking desconocido haría entrar el mismo aviso en cada
+#: corrida, que es peor que el problema que se arregla.
+_PARAMS_QUE_IDENTIFICAN = ("jk", "vjk", "gh_jid")
+
+
+def clave_de_url(url: str) -> str:
+    """La identidad de un aviso por su URL: sin tracking, sin `/` final, en minúsculas.
+
+    Del query string sobreviven sólo `_PARAMS_QUE_IDENTIFICAN`, ordenados, así
+    el orden en que los escribe cada link no cambia la clave.
+    """
+    base, _, query = (url or "").partition("?")
+    clave = base.rstrip("/").lower()
+    propios = sorted(
+        (k.lower(), v) for k, v in urllib.parse.parse_qsl(query.split("#")[0])
+        if k.lower() in _PARAMS_QUE_IDENTIFICAN
+    )
+    if propios:
+        clave += "?" + urllib.parse.urlencode(propios).lower()
+    return clave
+
 
 _PARENTESIS_RE = re.compile(r"[\(\[\{][^)\]\}]*[\)\]\}]")
 _NO_ALFANUM_RE = re.compile(r"[^a-z0-9]+")
@@ -139,7 +177,7 @@ class Job:
     @property
     def key(self) -> str:
         """Clave de quitar duplicados. La URL es el identificador estable entre corridas."""
-        return self.url.split("?")[0].rstrip("/").lower()
+        return clave_de_url(self.url)
 
     @property
     def dedupe_key(self) -> str:

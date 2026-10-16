@@ -1,10 +1,10 @@
 # Notas para Isaías
 
-**664 tests pasan.**
+**676 tests pasan.**
 
 ```
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.venv\Scripts\python.exe -m pytest tests -q      →  664 passed
+.venv\Scripts\python.exe -m pytest tests -q      →  676 passed
 ```
 
 Andando todo: los 3 portales argentinos, Indeed, Get on Board, LinkedIn Jobs,
@@ -447,9 +447,24 @@ historial (153 corridas, del 7/9 al 16/10). Salieron tres cosas:
   motivo en `descartadas.jsonl`, y `notificada_en` en el historial. Ver *El
   embudo de cada corrida* en el README.
 
-**Pendiente, sin tocar:** `Job.key` corta la URL en el `?`, y en Indeed el id del
-aviso va ahí (`viewjob?jk=…`). Para el dedupe todos los avisos de Indeed son la
-misma URL: por eso en el historial hay una sola oferta de Indeed.
+## 2.46. Indeed: todos los avisos eran el mismo
+
+- **El problema:** `Job.key` cortaba la URL en el `?` para sacar el tracking, y
+  en Indeed el id del aviso va ahí (`viewjob?jk=…`). Para el dedupe todos los
+  avisos de Indeed eran `https://ar.indeed.com/viewjob`: en cinco semanas entró
+  **uno solo** al historial, y el resto se descartó como "ya visto".
+- **Ahora:** la clave sale de `models.clave_de_url`, que conserva `jk` y `vjk`
+  (Indeed) y `gh_jid` (Greenhouse embebido), y sigue sacando `utm`, `ref` y el
+  resto. Las demás fuentes llevan el id en la ruta; se revisaron todas.
+- **Migración:** `seen_jobs.json` lleva `version_claves: 2`. Al pasar, se suma la
+  clave nueva de todo lo que está en el historial, así lo ya visto no vuelve como
+  nuevo. Se corrió a mano el 16/10/2026 sobre `isaias` y `juan_carlos`, con copia
+  en `seen_jobs.bak-claves-20261016.json`. Los avisos de Indeed que se perdieron
+  como "ya vistos" nunca se guardaron: ésos van a entrar una vez.
+- **`excluir_titulos` también después del modelo**, sobre el título que él
+  extrae. Antes se miraba sólo el de la fuente, y un post que el modelo tituló
+  "TECH LEAD | SENIOR FULL STACK e AI ENGINEER" llegó a puntuarse con "Lead" en
+  la lista.
 
 ## 2.42. Jev: probado y descartado por ahora
 

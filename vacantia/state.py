@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from vacantia.log import get_logger
-from vacantia.models import Job
+from vacantia.models import Job, clave_de_url
 
 logger = get_logger()
 
@@ -19,7 +19,12 @@ STATE_ROOT = Path("state")
 def _url_key(url: str) -> str:
     """Misma normalización que `Job.key`, para poder comparar contra el JSON
     del historial, donde hay dicts y no Jobs."""
-    return (url or "").split("?")[0].rstrip("/").lower()
+    return clave_de_url(url)
+
+
+#: Versión de cómo se arman las claves de `seen_keys`. La 2 es la que deja en el
+#: query los parámetros que identifican al aviso (ver `models.clave_de_url`).
+VERSION_CLAVES = 2
 
 
 def _richness(job: Job) -> tuple:
@@ -43,6 +48,39 @@ class State:
         self.history_file = self.dir / "job_history.json"
         self._data = self._load()
         self.ultimos_descartes: list[tuple[Job, str, str]] = []
+        self._migrar_claves()
+
+    def _migrar_claves(self) -> None:
+        """Pasa `seen_keys` a la clave nueva, una sola vez por perfil.
+
+        Antes de la versión 2, todos los avisos de Indeed tenían la misma clave
+        (`https://ar.indeed.com/viewjob`), porque se cortaba en el `?` y ahí va
+        el id. Con la clave nueva, las ofertas que ya están en el historial
+        volverían a entrar como nuevas, a puntuarse y a avisarse. Por eso se
+        suma la clave nueva de todo lo que está en el historial y en la última
+        tanda.
+
+        Lo que se descartó como "ya visto" por culpa de la clave vieja nunca se
+        guardó, así que no hay de dónde sacar su id: ésas entran una vez, que
+        es justamente lo que se perdía.
+
+        Se hace en memoria y queda escrita en el próximo `save`. **No escribe
+        al abrir**: la pantalla abre `State` de cualquier perfil sólo para
+        mirarlo, y mirar no puede modificar archivos (lo controla
+        `test_borrar_un_perfil_no_toca_a_los_demas`). Hasta la primera corrida
+        cuesta leer el historial una vez por cada `State`.
+        """
+        if self._data.get("version_claves", 1) >= VERSION_CLAVES:
+            return
+        self._data["version_claves"] = VERSION_CLAVES
+        if not self.dir.exists():
+            return        # perfil nuevo: no hay nada que migrar
+        urls = [h.get("url", "") for h in self.load_history() + self._read_last_run()]
+        nuevas = {clave_de_url(u) for u in urls if u} - self.seen_keys
+        if nuevas:
+            self._data["seen_keys"] = sorted(self.seen_keys | nuevas)
+            logger.debug(f"Claves de lo ya visto migradas a la versión {VERSION_CLAVES} "
+                         f"en {self.dir} (+{len(nuevas)})")
 
     def _load(self) -> dict:
         if self.seen_file.exists():

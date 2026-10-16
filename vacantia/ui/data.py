@@ -683,7 +683,9 @@ def motivos_del_sistema(oferta: dict, filtros: dict) -> list[tuple[str, str]]:
     lista de "Sin marcar" con avisos sobre los que el sistema ya había decidido:
     medido el 8/9/2026, 31 de 41.
     """
-    from vacantia.filters import passes_offer, passes_place, passes_seniority, passes_tech
+    from vacantia.filters import (
+        passes_offer, passes_place, passes_seniority, passes_tech, passes_titulo,
+    )
 
     job = Job.from_dict(oferta)
     motivos = []
@@ -692,6 +694,11 @@ def motivos_del_sistema(oferta: dict, filtros: dict) -> list[tuple[str, str]]:
     ok, why = passes_offer(job)
     if not ok:
         motivos.append(("no_es_oferta", why))
+    # El motor también lo aplica después de puntuar (ver `filters.passes_titulo`):
+    # sin esto, lo que no llegó al Telegram por el título seguía en Sin marcar.
+    ok, why = passes_titulo(job, filtros)
+    if not ok:
+        motivos.append(("titulo", why))
     ok, why = passes_language(job, filtros.get("language") or {})
     if not ok:
         motivos.append(("idioma", why))
@@ -1107,9 +1114,11 @@ def guardar_feedback(nombre_perfil: str, url: str, aplicado: bool, motivo: str,
 
 def buscar_oferta(nombre_perfil: str, url: str) -> dict | None:
     """La oferta del historial con esa URL, o None."""
-    clave = (url or "").split("?")[0].rstrip("/").lower()
+    from vacantia.models import clave_de_url
+
+    clave = clave_de_url(url)
     for entrada in State(nombre_perfil).load_history():
-        if entrada.get("url", "").split("?")[0].rstrip("/").lower() == clave:
+        if clave_de_url(entrada.get("url", "")) == clave:
             return entrada
     return None
 

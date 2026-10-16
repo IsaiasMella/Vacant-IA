@@ -1921,6 +1921,7 @@ _MOTIVOS_SISTEMA = {
     "idioma": "Piden un inglés más alto que el tuyo",
     "lugar": "El lugar o la modalidad no te sirven",
     "no_es_oferta": "No es una oferta de trabajo",
+    "titulo": "El título dice un puesto que no hacés",
     "tecnologias": "Pide tecnologías que no usás, sin alternativa",
     "nivel": "Es para un nivel menor al que buscás",
 }

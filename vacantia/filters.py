@@ -598,10 +598,34 @@ def excluido_por_titulo(job: Job, terminos: list[str]) -> str:
     descartarlo por eso sería tirar una oferta buena. En el título, en cambio,
     el puesto es lo que dice que es.
     """
-    titulo = norm(job.scored_title or job.title)
+    return _termino_en(job.scored_title or job.title, terminos)
+
+
+def _termino_en(titulo: str, terminos: list[str]) -> str:
+    """El primer término que aparece en el título, o ""."""
+    titulo = norm(titulo)
     if not titulo:
         return ""
     return next((t for t in terminos if (t_n := norm(t)) and t_n in titulo), "")
+
+
+def passes_titulo(job: Job, filtros: dict) -> tuple[bool, str]:
+    """`excluir_titulos` otra vez, ya con el título que extrajo el modelo.
+
+    Antes de puntuar sólo está el título de la fuente, y en un posteo de
+    LinkedIn eso es el comienzo del texto o "Publicación de Fulano". El puesto
+    de verdad lo dice el modelo al leerlo: el 16/10/2026 entró a puntuarse un
+    post titulado por el modelo "TECH LEAD | SENIOR FULL STACK e AI ENGINEER"
+    con "Lead" en la lista, porque el título de la fuente no lo decía.
+
+    Mira los dos títulos: el de la fuente puede haber cambiado de lista desde
+    que se puntuó, y esto se calcula al leer.
+    """
+    terminos = _as_list((filtros or {}).get("excluir_titulos"))
+    for titulo in (job.scored_title, job.title):
+        if termino := _termino_en(titulo, terminos):
+            return False, f"el título dice '{termino}', que no es lo que hace"
+    return True, ""
 
 
 def descartar_antes_de_puntuar(
@@ -672,6 +696,11 @@ def apply_filters(jobs: list[Job], profile: dict) -> tuple[list[Job], FilterStat
         ok, why = passes_offer(job)
         if not ok:
             fuera(job, why, "no_es_oferta")
+            continue
+
+        ok, why = passes_titulo(job, cfg)
+        if not ok:
+            fuera(job, why, "titulo")
             continue
 
         ok, why = passes_tech(job, cfg)
