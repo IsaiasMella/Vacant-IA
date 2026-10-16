@@ -376,6 +376,8 @@ class RRHHProfilesSource(Source):
         cuerpo = limpiar_post(texto)
         if not any(t in cuerpo.lower() for t in terminos):
             logger.debug(f"[rrhh]   no parece una búsqueda: {url}")
+            self.descartar(url, cuerpo.splitlines()[0] if cuerpo else "",
+                           "el post no anuncia una búsqueda", base["company"])
             return []
 
         titulo = next((l for l in cuerpo.splitlines() if len(l.strip()) > 15), "")

@@ -42,6 +42,7 @@ class State:
         self.last_run_file = self.dir / "last_run.json"
         self.history_file = self.dir / "job_history.json"
         self._data = self._load()
+        self.ultimos_descartes: list[tuple[Job, str, str]] = []
 
     def _load(self) -> dict:
         if self.seen_file.exists():
@@ -88,16 +89,22 @@ class State:
         batch_keys: set[str] = set()
         por_alt: dict[str, int] = {}   # clave secundaria -> índice en `new`
         dup_url = dup_alt = 0
+        #: (oferta, etapa, motivo) de lo que se sacó en esta llamada. Lo lee el
+        #: embudo para contar por fuente; el valor de retorno no cambia.
+        self.ultimos_descartes: list[tuple[Job, str, str]] = []
 
         for job in jobs:
             if job.key in seen or job.key in batch_keys:
                 dup_url += 1
+                self.ultimos_descartes.append((job, "ya_vista", "URL ya vista"))
                 continue
 
             alt = job.dedupe_key
             if alt and alt in seen_alt:
                 dup_alt += 1
                 logger.debug(f"    duplicada de otra corrida ({alt}): {job.url}")
+                self.ultimos_descartes.append(
+                    (job, "duplicada", "misma empresa y título que una ya vista"))
                 continue
 
             if alt and alt in por_alt:
@@ -110,11 +117,15 @@ class State:
                         f"'{job.source}' y descarto la de '{previa.source}'"
                     )
                     new[i] = job
+                    self.ultimos_descartes.append(
+                        (previa, "duplicada", f"misma oferta que trajo '{job.source}'"))
                 else:
                     logger.debug(
                         f"    duplicada entre fuentes ({alt}): descarto la de "
                         f"'{job.source}', ya la tengo por '{previa.source}'"
                     )
+                    self.ultimos_descartes.append(
+                        (job, "duplicada", f"misma oferta que trajo '{previa.source}'"))
                 batch_keys.add(job.key)
                 continue
 
@@ -159,6 +170,27 @@ class State:
         self._write_history(history)
         logger.debug(f"Estado guardado en {self.dir} (+{len(added)} al historial, {len(history)} total)")
 
+
+    def marcar_notificadas(self, urls: list[str], fecha: str | None = None) -> int:
+        """Estampa `notificada_en` en el historial. Devuelve cuántas tocó.
+
+        Hasta ahora sólo quedaba en el log *cuántas* se avisaron, no *cuáles*:
+        con `top_n` se avisan las 5 mejores y el resto queda sólo en la
+        pantalla, y no había forma de saber de cuál se enteró la persona.
+        Va aparte de `save` y no como campo de `Job` para que los perfiles que
+        no prenden el embudo no cambien su historial.
+        """
+        claves = {_url_key(u) for u in urls if u}
+        if not claves:
+            return 0
+        fecha = fecha or datetime.now(timezone.utc).isoformat()
+        history = self.load_history()
+        tocadas = [h for h in history if _url_key(h.get("url", "")) in claves]
+        for entrada in tocadas:
+            entrada["notificada_en"] = fecha
+        if tocadas:
+            self._write_history(history)
+        return len(tocadas)
 
     # --- Feedback de la persona --------------------------------------------
     # `job_history.json` es el archivo durable (last_run.json se pisa en cada

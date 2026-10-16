@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 
 from vacantia.aprendizaje import decisiones_para_el_prompt
 from vacantia.config import load_resumes
+from vacantia.embudo import ETAPA_DEL_FILTRO, Embudo, esta_prendido
 from vacantia.filters import (
     apply_filters,
     descartar_antes_de_puntuar,
@@ -109,6 +110,17 @@ def collect(sources: list[Source], result: RunResult) -> list[Job]:
     return jobs
 
 
+def _embudo_de_fuentes(embudo: Embudo, sources: list[Source], jobs: list[Job],
+                       result: RunResult) -> None:
+    """Lo que trajo cada fuente y lo que tiró ella misma antes de devolverlo."""
+    for source in sources:
+        for d in getattr(source, "descartes", []):
+            embudo.descartar(source.name, "descartada_en_fuente", d["motivo"],
+                             d["url"], d.get("titulo", ""), d.get("empresa", ""))
+    embudo.contar_jobs("trajo", jobs)
+    embudo.fallas = list(result.skipped)
+
+
 def empty_run_notes(result: RunResult, fstats, min_score: int) -> list[str]:
     """Qué pasó en una corrida que no tiene nada para avisar.
 
@@ -158,20 +170,33 @@ def run(profile: dict, dry_run: bool = False) -> RunResult:
     # Todos los CV del perfil: se puntúa contra el que mejor encaja con cada oferta.
     cvs = load_resumes(profile)
     state = State(name)
+    # Se cuenta siempre, que es gratis; se guarda sólo si el perfil lo pide.
+    embudo = Embudo(name, dry_run)
 
     # 1) fuentes → Job
-    jobs = collect(_usable_sources(profile, result), result)
+    sources = _usable_sources(profile, result)
+    jobs = collect(sources, result)
     result.fetched = len(jobs)
     logger.info(f"Total recolectado: {len(jobs)} oferta(s)")
+    _embudo_de_fuentes(embudo, sources, jobs, result)
 
     # 2) quitar duplicados
     new_jobs = state.filter_new(jobs)
+    for job, etapa, motivo in state.ultimos_descartes:
+        # "Ya vista" se cuenta y no se anota: es la misma oferta de una corrida
+        # anterior, que ya quedó registrada cuando se la vio por primera vez.
+        if etapa == "ya_vista":
+            embudo.contar(job.source, etapa)
+        else:
+            embudo.descartar_job(etapa, job, motivo)
 
     # 2 bis) vacantes ya cubiertas. Va antes del scoring: puntuar una búsqueda
     #        cerrada es gastar una llamada al LLM para descartarla después.
     new_jobs, cubiertas = drop_filled(new_jobs)
     result.filled = len(cubiertas)
     result.new = len(new_jobs)
+    for job, marca in cubiertas:
+        embudo.descartar_job("cubierta", job, f"vacante ya cubierta ({marca})")
 
     # 2 ter) lo que ya se sabe que no sirve, antes de pagar por puntuarlo. El
     #        título que nombra un puesto que la persona no hace, y la ubicación
@@ -182,12 +207,14 @@ def run(profile: dict, dry_run: bool = False) -> RunResult:
         logger.info(f"Descartadas {len(descartadas)} sin gastar una llamada al modelo")
         for job, motivo in descartadas:
             logger.debug(f"    sin puntuar: {job.display_title[:60]} — {motivo}")
+            embudo.descartar_job("antes_del_llm", job, motivo)
     result.new = len(new_jobs)
 
     # 3) triaje: si entraron muchas de golpe (cargaste empresas nuevas, cambiaste
     #    los search_terms), puntúa las más prometedoras y difiere el resto.
     to_score, deferred = triage(new_jobs, cvs, profile)
     result.deferred = len(deferred)
+    embudo.contar_jobs("diferida", deferred)
 
     # 4) scoring contra el CV, con lo que la persona ya marcó como ejemplo.
     #    Sin esto el sistema no aprendía: los descartes se guardaban y el modelo
@@ -195,11 +222,14 @@ def run(profile: dict, dry_run: bool = False) -> RunResult:
     decisiones = decisiones_para_el_prompt(state.load_history()) if to_score else ""
     scored = score_jobs(to_score, cvs, profile, decisiones) if to_score else []
     result.scored = len(scored)
+    embudo.contar_jobs("puntuada", scored)
 
     # 5) filtros de ubicación / modalidad / idioma
     eligible, fstats = apply_filters(scored, profile)
     result.filtered_out = fstats.dropped
     result.english_dropped = fstats.english_count
+    for job, why, etiqueta in fstats.descartadas:
+        embudo.descartar_job(ETAPA_DEL_FILTRO.get(etiqueta, etiqueta), job, why)
 
     # Informe opcional: cuántas se cayeron por idioma y cuánto valía la mejor.
     # Va en la notificación a pedido del perfil — ver report.english_pain.
@@ -212,6 +242,18 @@ def run(profile: dict, dry_run: bool = False) -> RunResult:
     result.matched = len(matches)
     result.jobs = matches
     logger.info(f"{len(matches)} de {len(eligible)} pasaron el min_score de {min_score}")
+    superan = filter_by_min_score(eligible, min_score)
+    for job in eligible:
+        if job not in superan:
+            embudo.descartar_job("bajo_umbral", job,
+                                 f"puntaje {job.score or 0}, debajo del mínimo de {min_score}"
+                                 if (job.score or 0) < min_score
+                                 else "el modelo dijo que no vale la pena postularse")
+    embudo.contar_jobs("supera_umbral", superan)
+    # Pasan el umbral pero no entran en las `top_n` del aviso: quedan en la
+    # pantalla y no llegan al Telegram. Se cuentan porque es lo que se pierde
+    # de vista, no porque se descarten.
+    embudo.contar_jobs("fuera_del_top", [j for j in superan if j not in matches])
 
     # Si no hay nada que avisar, el aviso lo explica (ver notify_when_empty).
     if not matches:
@@ -222,6 +264,9 @@ def run(profile: dict, dry_run: bool = False) -> RunResult:
         logger.info("--dry-run: no notifico ni guardo estado.")
         ConsoleNotifier({"type": "console"}, profile).send(matches, notes)
         result.seconds = time.time() - t0
+        embudo.contar_jobs("sin_avisar", matches)
+        if esta_prendido(profile):
+            embudo.guardar(state.dir, result.seconds)
         return result
 
     notify_empty = bool(profile.get("notify_when_empty", False))
@@ -245,6 +290,17 @@ def run(profile: dict, dry_run: bool = False) -> RunResult:
     # mientras el buscador las tenga indexadas.
     state.mark_seen(to_score + [j for j, _ in cubiertas])
     state.save(scored)
+
+    # 9) embudo. "Avisada" es lo que salió por un canal que la persona lee: la
+    #    consola sola no cuenta, porque devuelve True aunque Telegram haya fallado.
+    avisadas = matches if any(n != "console" for n in result.notifiers_used) else []
+    embudo.contar_jobs("avisada", avisadas)
+    embudo.contar_jobs("sin_avisar", [j for j in matches if j not in avisadas])
+    if esta_prendido(profile):
+        if avisadas:
+            state.marcar_notificadas([j.url for j in avisadas])
+        embudo.fallas = list(result.skipped)
+        embudo.guardar(state.dir, time.time() - t0)
 
     result.seconds = time.time() - t0
     logger.info(

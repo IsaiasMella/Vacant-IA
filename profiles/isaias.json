@@ -13,11 +13,13 @@
   "top_n": 5,
   "max_new_per_run": 30,
   "notify_when_empty": true,
+  "registro_embudo": true,
   "filters": {
     "max_age_days": 7,
     "location": {
       "country": "Argentina",
-      "city": "Bahía Blanca"
+      "city": "Bahía Blanca",
+      "remoto_abierto_a_latam": true
     },
     "work_modes": [
       "remote"
@@ -30,7 +32,7 @@
     "excluir_titulos": [
       ".NET",
       "JAVA",
-      "Backend",
+      "Lead",
       "Frontend",
       "Machine Learning",
       "MLOps",

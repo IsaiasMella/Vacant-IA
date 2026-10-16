@@ -491,6 +491,8 @@ class GooglePostsSource(Source):
                 if not es_reciente(fecha, self.max_age_days):
                     viejos += 1
                     logger.debug(f"    fuera de la ventana ({fecha}): {url}")
+                    self.descartar(url, result.get("title", ""),
+                                   f"publicado hace más de {self.max_age_days} días")
                     continue
 
                 snippet = result.get("snippet", "")
@@ -503,6 +505,7 @@ class GooglePostsSource(Source):
                     if not es_oferta:
                         descartados += 1
                         logger.debug(f"    no es oferta ({motivo}): {title[:60]}")
+                        self.descartar(url, title, f"no parece una oferta: {motivo}", author)
                         continue
 
                 jobs.append(

@@ -249,6 +249,44 @@ def home_cities(cfg: dict) -> list[str]:
     return _as_list(cfg.get("city")) or _as_list(cfg.get("home_city"))
 
 
+# --- remoto abierto a LATAM o a cualquier país --------------------------------
+# El filtro de país tiraba justo las ofertas que más pagan: una empresa de afuera
+# que contrata desde la región (contractor, Deel, pago en USD). Medido sobre el
+# historial de Isaías al 16/10/2026: "LLM Engineer", "Full Stack AI Engineer" y
+# "AI Specialist (Applied AI)", remotas de EE. UU. con 88 a 90 puntos, cayeron
+# por "país 'Estados Unidos' fuera de Argentina".
+#
+# No alcanza con prender `remote_anywhere`: eso deja entrar también el remoto
+# *para* Colombia o México, que la regla de país existe para sacar (ver
+# `passes_place`). Lo que distingue a uno del otro es que el aviso **diga** que
+# está abierto a la región o al mundo, y eso es lo que se busca acá.
+_ABIERTA_A_LATAM = re.compile(
+    r"\blatam\b|\blatinoamerica\b|\bamerica latina\b|\blatin america\b"
+    r"|\blatinoamerican|\bsudamerica\b|\bsouth america\b"
+    r"|\bworldwide\b|\banywhere in the world\b|\bfrom anywhere\b(?! in\b)"
+    r"|\bany country\b|\bcualquier (?:pais|parte del mundo|lugar del mundo)\b"
+    r"|\bdesde cualquier lugar\b|\bglobal remote\b|\bremote global\b|\bremoto global\b"
+)
+
+
+def abierta_a_latam(job: Job) -> str:
+    """El texto que dice que la oferta acepta gente de LATAM o del mundo, o "".
+
+    Mira título, ubicación y descripción: LinkedIn lo pone en la ubicación
+    ("Remote, LATAM"), los posteos en el título y los portales en el cuerpo.
+    """
+    for texto in (job.title, job.scored_title, job.location, job.location_remote,
+                  job.description):
+        if m := _ABIERTA_A_LATAM.search(" ".join(norm(texto).split())):
+            return m.group(0)
+    return ""
+
+
+def acepta_remoto_latam(location_cfg: dict) -> bool:
+    """`filters.location.remoto_abierto_a_latam`, apagado por defecto."""
+    return bool((location_cfg or {}).get("remoto_abierto_a_latam", False))
+
+
 def passes_place(job: Job, location_cfg: dict, modes_cfg) -> tuple[bool, str, str]:
     """Ubicación y modalidad, evaluadas **juntas** — la regla de Bahía Blanca.
 
@@ -274,6 +312,11 @@ def passes_place(job: Job, location_cfg: dict, modes_cfg) -> tuple[bool, str, st
     `location.remote_anywhere: true` vuelve al comportamiento viejo, donde el
     remoto ignora el país. Por defecto está apagado.
 
+    `location.remoto_abierto_a_latam: true` deja entrar el remoto de otro país
+    sólo cuando el aviso dice que acepta gente de LATAM o del mundo (ver
+    `abierta_a_latam`). El remoto *para* Colombia sigue afuera. Apagado por
+    defecto.
+
     Devuelve (pasa, motivo, etiqueta) — la etiqueta es "location" o "work_mode",
     para que FilterStats siga contando por dónde se cayó cada oferta.
     """
@@ -295,7 +338,12 @@ def passes_place(job: Job, location_cfg: dict, modes_cfg) -> tuple[bool, str, st
             return False, f"modalidad 'remote' no está en {', '.join(allowed)}", "work_mode"
         if location_cfg.get("remote_anywhere", False):
             return True, "", ""
-        return pais_ok()
+        ok, why, etiqueta = pais_ok()
+        if not ok and acepta_remoto_latam(location_cfg) and (marca := abierta_a_latam(job)):
+            logger.debug(f"    remoto abierto a LATAM ({marca!r}): "
+                         f"'{job.display_title[:45]}' pasa aunque sea de {job.country}")
+            return True, "", ""
+        return ok, why, etiqueta
 
     # El país filtra en todos los casos, sea cual sea la modalidad.
     ok, why, etiqueta = pais_ok()
@@ -491,6 +539,9 @@ class FilterStats:
     #: Descartadas por el filtro de idioma, ya puntuadas. Sirve para mostrar
     #: cuánto valía lo que te perdiste por no saber inglés.
     english_dropped: list[Job] = field(default_factory=list)
+    #: (oferta, motivo, etiqueta) de cada descarte. Lo lee el embudo, que
+    #: necesita la fuente de cada una y `by_reason` sólo tiene el total.
+    descartadas: list[tuple[Job, str, str]] = field(default_factory=list)
 
     @property
     def english_count(self) -> int:
@@ -565,6 +616,9 @@ def descartar_antes_de_puntuar(
        un perfil que no lo configure sigue funcionando igual que antes.
     2. **La fuente ya dijo el país y no es el que se busca.** LinkedIn Jobs lo
        trae como campo propio y los portales lo leen de la página del aviso.
+       Con `location.remoto_abierto_a_latam` no se descarta si el aviso dice
+       que está abierto a LATAM o al mundo: si es remoto o no lo decide el
+       modelo al puntuar, y después `passes_place` aplica la regla entera.
 
     **Sólo el país, y a propósito.** Acá no se filtra por modalidad ni por
     ciudad, aunque `passes_place` sepa hacerlo: un híbrido en Bahía Blanca tiene
@@ -579,13 +633,15 @@ def descartar_antes_de_puntuar(
     cfg = profile.get("filters") or {}
     terminos = _as_list(cfg.get("excluir_titulos"))
     paises = _as_list((cfg.get("location") or {}).get("country"))
+    latam = acepta_remoto_latam(cfg.get("location") or {})
 
     quedan: list[Job] = []
     fuera: list[tuple[Job, str]] = []
     for job in jobs:
         if termino := excluido_por_titulo(job, terminos):
             fuera.append((job, f"el título dice '{termino}', que no es lo que hace"))
-        elif paises and job.country and not _country_matches(job.country, paises):
+        elif (paises and job.country and not _country_matches(job.country, paises)
+              and not (latam and abierta_a_latam(job))):
             fuera.append((job, f"la fuente ya dijo que es de {job.country}"))
         else:
             quedan.append(job)
@@ -605,38 +661,39 @@ def apply_filters(jobs: list[Job], profile: dict) -> tuple[list[Job], FilterStat
 
     kept: list[Job] = []
     dropped: list[tuple[Job, str]] = []
+
+    def fuera(job: Job, why: str, etiqueta: str) -> None:
+        dropped.append((job, why))
+        stats.by_reason[etiqueta] += 1
+        stats.descartadas.append((job, why, etiqueta))
+
     for job in jobs:
         # Primero lo que no es una vacante: ningún otro motivo importa ahí.
         ok, why = passes_offer(job)
         if not ok:
-            dropped.append((job, why))
-            stats.by_reason["no_es_oferta"] += 1
+            fuera(job, why, "no_es_oferta")
             continue
 
         ok, why = passes_tech(job, cfg)
         if not ok:
-            dropped.append((job, why))
-            stats.by_reason["tecnologias"] += 1
+            fuera(job, why, "tecnologias")
             continue
 
         ok, why = passes_seniority(job, cfg)
         if not ok:
-            dropped.append((job, why))
-            stats.by_reason["nivel"] += 1
+            fuera(job, why, "nivel")
             continue
 
         # Ubicación y modalidad van juntas (regla de Bahía Blanca), el idioma
         # aparte. `passes_place` ya devuelve con qué etiqueta contar el descarte.
         ok, why, etiqueta = passes_place(job, location_cfg, modes_cfg)
         if not ok:
-            dropped.append((job, why))
-            stats.by_reason[etiqueta] += 1
+            fuera(job, why, etiqueta)
             continue
 
         ok, why = passes_language(job, language_cfg)
         if not ok:
-            dropped.append((job, why))
-            stats.by_reason["language"] += 1
+            fuera(job, why, "language")
             stats.english_dropped.append(job)
             continue
 

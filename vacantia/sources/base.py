@@ -19,6 +19,16 @@ class Source(ABC):
         self.config = config      # el bloque de esta fuente dentro del perfil
         self.profile = profile    # el perfil completo (keywords, candidate, ...)
         self.max_age_days = self._resolver_antiguedad()
+        #: Lo que la fuente encontró y tiró ella misma antes de devolverlo
+        #: (avisos viejos, posteos que no son ofertas). Lo lee el embudo: sin
+        #: esto, Get on Board perdía 2.000 avisos por antigüedad en cinco
+        #: semanas y sólo quedaba un número suelto en el log.
+        self.descartes: list[dict] = []
+
+    def descartar(self, url: str, titulo: str, motivo: str, empresa: str = "") -> None:
+        """Anota algo que la fuente encontró y no devuelve, con el porqué."""
+        self.descartes.append(
+            {"url": url, "titulo": titulo, "empresa": empresa, "motivo": motivo})
 
     def _resolver_antiguedad(self) -> int:
         """Los días de antigüedad que acepta esta fuente, en orden de prioridad.

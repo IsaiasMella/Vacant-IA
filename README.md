@@ -698,6 +698,14 @@ Las tres decisiones detrás de eso:
    Colombia o México suele ser remoto *para* Colombia o México por temas legales
    de contratación. (`"remote_anywhere": true` vuelve al comportamiento sin
    filtro de país.)
+
+   Con `"remoto_abierto_a_latam": true` en `filters.location`, un remoto de otro
+   país entra **si el aviso dice que acepta gente de LATAM o del mundo**
+   ("Remote, LATAM", "Latin America", "worldwide", "desde cualquier país"). Es
+   para la empresa de afuera que contrata desde la región (contractor, Deel,
+   pago en USD). El remoto *para* Colombia sigue afuera, y "anywhere in the US"
+   no cuenta. Vale también para el descarte por país de antes del scoring.
+   Apagado por defecto.
 2. **La ciudad filtra sólo lo presencial.** Un remoto publicado desde Córdoba se
    trabaja igual desde Bahía Blanca.
 3. **Un presencial en tu ciudad entra aunque pidas sólo remoto.** Quien pone
@@ -786,6 +794,39 @@ cuántas se cayeron por cada filtro y si alguna fuente no estuvo disponible.
 Sin eso, "hoy no salió nada" y "hace tres días que la fuente está caída" son el
 mismo silencio, y el segundo no se descubre hasta que a alguien se le ocurre ir a
 mirar.
+
+## El embudo de cada corrida (`registro_embudo`)
+
+Con `"registro_embudo": true` en el perfil, cada corrida deja en
+`state/<perfil>/` qué trajo cada fuente y dónde se cayó cada oferta. Apagado por
+defecto.
+
+- **`embudo.jsonl`**: una línea por corrida, con el conteo por fuente y por etapa.
+  Las corridas con `--dry-run` también se anotan, con `"dry_run": true`.
+- **`descartadas.jsonl`**: una línea por oferta descartada, con URL, título,
+  fuente, etapa y motivo. La misma oferta con el mismo motivo se anota una sola
+  vez, aunque vuelva en cada corrida.
+- **`notificada_en`** en `job_history.json`: cuándo llegó esa oferta por
+  Telegram. La consola sola no cuenta.
+
+Las etapas, en orden:
+
+| Etapa | Qué es |
+|---|---|
+| `descartada_en_fuente` | la fuente la encontró y la tiró ella misma: aviso viejo, posteo que no es oferta, Indeed sin detalle |
+| `trajo` | lo que la fuente devolvió al motor |
+| `ya_vista` / `duplicada` | por URL / por empresa + título (de otra corrida o de otra fuente) |
+| `cubierta` | la vacante dice que ya se cubrió |
+| `antes_del_llm` | `excluir_titulos`, o la fuente ya dijo un país que no es |
+| `diferida` | el triaje la dejó para la próxima corrida |
+| `puntuada` | pasó por el modelo |
+| `no_es_oferta`, `tecnologias`, `nivel`, `ubicacion`, `modalidad`, `idioma` | los filtros de después del scoring |
+| `bajo_umbral` / `supera_umbral` | contra `min_score` |
+| `fuera_del_top` | superó el umbral pero no entró en las `top_n` del aviso |
+| `avisada` / `sin_avisar` | salió por Telegram, o no (dry-run o falló el envío) |
+
+Cierran como sumas: `trajo` = ya vista + duplicada + cubierta + antes del LLM +
+diferida + puntuada.
 
 ## Fuentes disponibles
 

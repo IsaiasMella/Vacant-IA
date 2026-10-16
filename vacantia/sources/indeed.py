@@ -290,6 +290,9 @@ class IndeedSource(PortalSource):
         if not self.fetch_description:
             return jobs
         sirven = [j for j in jobs if j.description and j.title != _SIN_TITULO]
+        for j in jobs:
+            if j not in sirven:
+                self.descartar(j.url, j.title, "sin detalle: Indeed no dejó leer el aviso")
         if perdidos := len(jobs) - len(sirven):
             logger.info(f"[{self.name}] {perdidos} aviso(s) sin detalle, afuera: "
                         "sin la página del aviso no hay ni título ni empresa")

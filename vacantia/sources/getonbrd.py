@@ -217,6 +217,10 @@ class GetOnBoardSource(Source):
             from vacantia.sources.google_posts import es_reciente
 
             quedan = [j for j in jobs if es_reciente(j.posted_at, self.max_age_days)]
+            for j in jobs:
+                if j not in quedan:
+                    self.descartar(j.url, j.title, f"publicado hace más de "
+                                   f"{self.max_age_days} días", j.company)
             if viejos := len(jobs) - len(quedan):
                 logger.info(f"[{self.name}] {viejos} aviso(s) de más de "
                             f"{self.max_age_days} días, afuera")

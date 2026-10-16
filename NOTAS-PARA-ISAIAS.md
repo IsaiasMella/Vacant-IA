@@ -1,10 +1,10 @@
 # Notas para Isaías
 
-**651 tests pasan.**
+**664 tests pasan.**
 
 ```
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.venv\Scripts\python.exe -m pytest tests -q      →  651 passed
+.venv\Scripts\python.exe -m pytest tests -q      →  664 passed
 ```
 
 Andando todo: los 3 portales argentinos, Indeed, Get on Board, LinkedIn Jobs,
@@ -428,6 +428,28 @@ El 6/10/2026 la ventana de `abrir.bat` mostró dos tracebacks con
   conexión cortada, que volvía a fallar. De ahí el segundo traceback.
 - **Ahora:** un corte del navegador se suelta en silencio (`Handler.handle` en
   `vacantia/ui/server.py`). Los bugs de verdad siguen saliendo como antes.
+
+## 2.45. El embudo por fuente, Backend Python y el remoto para LATAM
+
+El 16/10/2026 se midió qué rendía cada fuente cruzando `vacantia.log` con el
+historial (153 corridas, del 7/9 al 16/10). Salieron tres cosas:
+
+- **`excluir_titulos` tenía "Backend"** y tiraba antes del modelo justo lo que
+  buscás: "Senior Backend Python + IA Developer – Remoto", "Sr Python Backend
+  Developer". Se sacó. Se agregó **"Lead"**, que cubre Tech Lead y Team Lead.
+- **El filtro de país tiraba remotos de afuera que contratan desde LATAM**: un
+  "LLM Engineer" y un "Full Stack AI Engineer" de EE. UU., con 88 y 90 puntos.
+  Ahora tu perfil tiene `filters.location.remoto_abierto_a_latam: true`: entran
+  si el aviso dice LATAM, Latin America, worldwide o "desde cualquier país".
+  El remoto *para* Colombia sigue afuera.
+- **No había registro por fuente.** Con `"registro_embudo": true` (sólo en tu
+  perfil) cada corrida deja `state/isaias/embudo.jsonl`, las descartadas con su
+  motivo en `descartadas.jsonl`, y `notificada_en` en el historial. Ver *El
+  embudo de cada corrida* en el README.
+
+**Pendiente, sin tocar:** `Job.key` corta la URL en el `?`, y en Indeed el id del
+aviso va ahí (`viewjob?jk=…`). Para el dedupe todos los avisos de Indeed son la
+misma URL: por eso en el historial hay una sola oferta de Indeed.
 
 ## 2.42. Jev: probado y descartado por ahora
 
