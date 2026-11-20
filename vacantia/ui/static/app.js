@@ -256,3 +256,61 @@ function elegirCv(id) {
   var campo = document.querySelector('input[name=cv_elegido]');
   if (campo) { campo.value = id; }
 }
+
+// Entrevistas: subir la grabación.
+//
+// No es un formulario común porque la grabación es un video de cientos de MB.
+// Se manda el archivo pelado como cuerpo del pedido (los demás datos van en la
+// URL) y el servidor lo escribe a disco de a pedazos, sin cargarlo en memoria.
+// Va con XMLHttpRequest y no con fetch porque fetch no avisa cuánto se subió, y
+// con un video de 1 GB la persona tiene que ver que avanza.
+//
+// Cuando termina, el servidor contesta la dirección del repaso y se va ahí. Esa
+// página sí se actualiza sola cuando el análisis termina: ahí no hay nada que
+// estar escribiendo, que es lo que impide recargar en el resto de la pantalla.
+function subirEntrevista(form) {
+  var archivo = form.querySelector('input[type=file]').files[0];
+  var estado = form.querySelector('.estado-subida');
+  var barra = form.querySelector('.progreso-subida');
+  var boton = form.querySelector('button[type=submit]');
+  if (!archivo) { return false; }
+
+  var params = new URLSearchParams({
+    perfil: form.dataset.perfil,
+    empresa: form.querySelector('[name=empresa]').value,
+    fecha: form.querySelector('[name=fecha]').value,
+    archivo: archivo.name
+  });
+  var pedido = new XMLHttpRequest();
+  pedido.open('POST', '/entrevista-subir?' + params.toString());
+  pedido.setRequestHeader('Content-Type', 'application/octet-stream');
+
+  boton.disabled = true;
+  barra.hidden = false;
+  estado.textContent = 'Subiendo la grabación…';
+  pedido.upload.onprogress = function (e) {
+    if (e.lengthComputable) {
+      barra.value = Math.round(100 * e.loaded / e.total);
+      estado.textContent = 'Subiendo la grabación: ' + barra.value + '%';
+    }
+  };
+  pedido.onload = function () {
+    var respuesta = {};
+    try { respuesta = JSON.parse(pedido.responseText); } catch (err) { /* sin cuerpo */ }
+    if (pedido.status === 200 && respuesta.url) {
+      estado.textContent = 'Listo. Abriendo el repaso…';
+      window.location.href = respuesta.url;
+      return;
+    }
+    fallo(respuesta.error || 'No se pudo subir la grabación.');
+  };
+  pedido.onerror = function () { fallo('Se cortó la conexión con la pantalla. Probá de nuevo.'); };
+
+  function fallo(texto) {
+    estado.textContent = texto;
+    barra.hidden = true;
+    boton.disabled = false;
+  }
+  pedido.send(archivo);
+  return false;
+}

@@ -590,6 +590,14 @@ def buscar_oferta(nombre_perfil: str, url: str) -> dict | None:
     return None
 
 
+def ofertas_de_la_empresa(nombre_perfil: str, empresa: str) -> list[dict]:
+    """Las ofertas del historial que pueden ser de esa empresa, para proponerlas
+    en el repaso de una entrevista (ver `vacantia.entrevistas.ofertas_parecidas`)."""
+    from vacantia.entrevistas import ofertas_parecidas
+
+    return ofertas_parecidas(State(nombre_perfil).load_history(), empresa)
+
+
 def como_job(oferta: dict) -> Job:
     return Job.from_dict(oferta)
 

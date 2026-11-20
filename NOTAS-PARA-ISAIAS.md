@@ -1,10 +1,10 @@
 # Notas para Isaías
 
-**740 tests pasan.**
+**776 tests pasan.**
 
 ```
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.venv\Scripts\python.exe -m pytest tests -q      →  740 passed
+.venv\Scripts\python.exe -m pytest tests -q      →  776 passed
 ```
 
 Andando todo: los 3 portales argentinos, Indeed, Get on Board, LinkedIn Jobs,
@@ -26,6 +26,7 @@ historial de git, en el commit `fe29188`; 2.40 y 2.41 no llegaron a esa versión
 | 2 | **Decidir qué hacés con el inglés.** Hay unas 90 ofertas ya puntuadas esperando detrás de esa casilla (2.28) | Mi perfil |
 | 3 | **Usarlo una semana** y anotar qué falla antes de pasárselo a nadie | — |
 | 4 | **4 ofertas viejas sin los juicios de 2.41** (3 de `google_posts`, 1 de .NET). Marcarlas a mano o re-puntuarlas (4 llamadas) | Trabajos |
+| 5 | **Probar Entrevistas con una grabación tuya de verdad** y ver si el repaso sirve (2.52) | Entrevistas |
 
 Ya está instalado y corre solo desde el 5/9/2026 (2.14). Armarle la copia a cada
 familiar queda para después de la semana de prueba (2.32).
@@ -248,7 +249,7 @@ el idioma primero, porque el lugar lo deduce el modelo y ahí aparecen los error
   hay ninguna lista de tecnologías en el código, a propósito: tiene que servir
   para cualquier oficio.
 - **Cada bloque dice contra cuántas se mide**, con el número grande de la
-  cabecera (`_cabecera` en `render.py`). Si agregás un bloque, pasale el total.
+  cabecera (`_cabecera` en `render/pestania_metricas.py`). Si agregás un bloque, pasale el total.
 - **Las tarjetas de arriba suman el total**, y la cuenta escrita aparece sólo si cierra.
 - **Lo escrito a mano** se agrupa sin mirar mayúsculas ni tildes, y no se
   interpreta más que eso: cuando una idea se repite, va al desplegable.
@@ -470,7 +471,7 @@ historial (153 corridas, del 7/9 al 16/10). Salieron tres cosas:
 
 - **El pedido:** "menores a 50 no quiero ver nada". En `isaias` eran 1044 de las
   1179 sin marcar, y tapaban las 135 que servían.
-- **Ahora:** `PUNTAJE_PARA_MOSTRAR = 50` en `ui/data.py`. Se corta en
+- **Ahora:** `PUNTAJE_PARA_MOSTRAR = 50` en `ui/data/historial.py`. Se corta en
   `_por_estado` y en `contar_ofertas`, así la lista y los números dicen lo mismo,
   en todas las pestañas **menos Apliqué** (hay 3 aplicadas debajo de 50, y para
   el seguimiento tienen que seguir ahí).
@@ -579,6 +580,70 @@ mal por cómo las leíamos, no por el portal.
 eran de esta semana, y **23 tienen más de 7 días y nunca las viste**. Siguen
 abiertas. Si las querés ver una vez, poné `"max_age_days": 30` en el bloque de
 `getonbrd`: entran a puntuar unas 23, que son unas 4 llamadas al modelo.
+
+## 2.50. `render.py` y `data.py`, partidos
+
+Eran de 2.428 y 1.714 líneas. Ahora son paquetes, con un módulo por tema, y se
+siguen usando igual (`render.trabajos(...)`, `data.ofertas(...)`): el
+`__init__.py` de cada uno re-exporta todo.
+
+- **`ui/render/`:** `comun` (iconos, `esc`, ayudas), `shell` (barra lateral y
+  panel de búsqueda), `pestania_trabajos`, `pestania_linkedin`,
+  `pestania_metricas`, `pestania_entrevistas` y `mensajes_y_consejo`. Los
+  nombres llevan `pestania_` para no pisar las funciones `render.trabajos` y
+  `render.linkedin`.
+- **`ui/data/`:** `configuracion` (perfiles, CV, `.env`, empresas, Telegram),
+  `historial` (ofertas, motivos, feedback, archivar), `metricas` y `estado`.
+- **Si un test parchea algo de `data`,** tiene que parchear el submódulo donde
+  vive la función, no el paquete. Pasó con `subprocess` en
+  `test_configuracion.py`.
+
+Se hizo comparando cada definición del archivo viejo contra la nueva: son
+idénticas, salvo `ESTATICOS`, que ahora sube dos carpetas.
+
+## 2.51. Apliqué por semanas de lunes a domingo
+
+El contador de arriba contaba "últimos 7 días", "último mes": ventanas para
+atrás desde hoy. Así una semana arrancaba cualquier día y las barras salían
+rotuladas "24/10" sin decir qué día era.
+
+- **Períodos:** esta semana (por defecto), semana pasada, últimas 4 semanas,
+  últimos 3 meses y desde que empecé. Siempre de lunes a domingo
+  (`ui/semanas.py`).
+- **Una semana:** siete barras, `Lun 16` … `Dom 22`. Hoy resaltado; los días
+  que no llegaron, sin cero.
+- **Varias semanas:** grilla de semanas por días, la de hoy arriba.
+- **Tarjetas:** "Aplicaste el mar 17/11" en vez de "hace 3 días".
+- Descarté usa el mismo selector.
+- Un link viejo con `?apliq=30d` cae en "Esta semana".
+
+## 2.52. Entrevistas: repasar una grabación
+
+Pestaña nueva. Subís la grabación (video de Meet/Zoom/Teams o audio), la
+empresa como te acuerdes y la fecha, y devuelve el repaso pregunta por pregunta
+(ver el README, *Entrevistas*). Está en `vacantia/entrevistas.py`.
+
+- **Cómo:** ffmpeg saca el audio (mono, 16 kHz, Opus a 24 kbps, en tramos de
+  10 minutos), Gemini lo transcribe por la Files API y después analiza la
+  transcripción contra tus CV, y contra el aviso si quedó vinculado. Corre en
+  un proceso aparte; la página pregunta el estado cada 4 segundos y se recarga
+  sola al terminar.
+- **Probado el 20/11** con una entrevista armada con la voz de Windows, en mp4:
+  12 segundos de punta a punta, transcribió bien a los dos hablantes, marcó
+  floja la respuesta de Kubernetes y no inventó experiencia que tu CV no tiene.
+  Falta probarla con una entrevista tuya de verdad (punto 5 de la sección 1).
+- **La oferta es opcional.** Propone las de tu historial con ese nombre de
+  empresa (probado con "RedBee": encuentra "Senior AI Specialist", aplicada el
+  8/9). Si la mandaste por privado, el repaso sale igual.
+- **Privacidad:** el audio sale a Google, y en el plan gratis lo pueden usar
+  para mejorar sus productos. Lo elegiste así el 20/11. Se borra de Google al
+  transcribir; el video subido se borra de `state/` y queda tu original.
+- **Necesita ffmpeg** (lo tenés por winget). En la copia de un familiar, si no
+  está, la pantalla dice cómo instalarlo.
+- **Un análisis que se corta** (se apagó la compu) se da por cortado a los 30
+  minutos sin novedades, con el botón para reintentar.
+- **No marca nada solo como "sin respuesta".** Con procesos que tardan un mes y
+  medio en contestar, cerrar postulaciones por tiempo sería mentir.
 
 ## 2.42. Jev: probado y descartado por ahora
 

@@ -17,6 +17,7 @@ SECCIONES_BUSCAR = (
     ("linkedin", "LinkedIn URLs", "linkedin"),
 )
 SECCIONES_RESTO = (
+    ("entrevistas", "Entrevistas", "entrevistas"),
     ("estadisticas", "Métricas", "estadisticas"),
     ("datos", "Mi perfil", "datos"),
 )

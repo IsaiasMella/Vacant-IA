@@ -52,8 +52,8 @@ No hay linter configurado.
 
 **Pantalla (`vacantia/ui/`).**
 - **Servidor:** `ThreadingHTTPServer` de biblioteca estándar, que escucha sólo en 127.0.0.1 y no tiene login.
-- **Disco:** `data.py` tiene todo lo que lee o escribe.
-- **HTML:** `render.py` y `formulario.py` lo arman con f-strings y escapan con `esc()`.
+- **Disco:** el paquete `data/` tiene todo lo que lee o escribe (`configuracion`, `historial`, `metricas`, `estado`); se usa como `data.X`.
+- **HTML:** el paquete `render/` (un módulo por pestaña) y `formulario.py` lo arman con f-strings y escapan con `esc()`. Se usa como `render.X`.
 - **Estilos:** `css/*.css`, concatenados en el orden de `estilos.ORDEN`.
 - **htmx:** vendorizado en `static/`. Nunca desde un CDN, porque la máquina puede estar sin internet.
 - **Patrón de las pantallas:**

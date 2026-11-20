@@ -9,11 +9,13 @@ archivos que el motor.
 """
 
 import argparse
+import json
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlencode, urlparse
 
+from vacantia import entrevistas as ent
 from vacantia.log import get_logger
 from vacantia.ui import corrida, data, estilos, formulario, render
 
@@ -138,6 +140,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._get_linkedin(perfil, params)
             if ruta == "/corrida":
                 return self._get_corrida(perfil, params)
+            if ruta == "/entrevistas":
+                return self._get_entrevistas(perfil, params)
+            if ruta == "/entrevista-estado":
+                return self._get_entrevista_estado(perfil, params)
         except FileNotFoundError as e:
             return self._pagina("Error", render.avisos([("error", str(e))]), perfil,
                                 "trabajos", 404)
@@ -230,6 +236,89 @@ class Handler(BaseHTTPRequestHandler):
             aplicadas=aplicadas, descartadas=descartadas,
         )
         self._pagina("Trabajos", cuerpo, perfil, "trabajos")
+
+    # --- entrevistas ------------------------------------------------------
+
+    def _get_entrevistas(self, perfil: str, params: dict) -> None:
+        """La lista, o el repaso de una si viene `id`."""
+        mensajes = _mensajes(params)
+        ident = (params.get("id") or [""])[0]
+        if ident:
+            try:
+                datos = ent.leer(perfil, ident)
+            except ent.ErrorDeEntrevista as e:
+                mensajes.append(("error", str(e)))
+            else:
+                cuerpo = render.entrevista(
+                    perfil, datos, ent.analisis(perfil, ident), ent.transcripcion(perfil, ident),
+                    data.ofertas_de_la_empresa(perfil, datos["empresa"]),
+                    data.buscar_oferta(perfil, datos["oferta_url"]) if datos.get("oferta_url") else None,
+                    mensajes)
+                return self._pagina(f"Entrevista con {datos['empresa']}", cuerpo, perfil,
+                                    "entrevistas")
+        cuerpo = render.entrevistas(perfil, ent.listar(perfil), mensajes)
+        self._pagina("Entrevistas", cuerpo, perfil, "entrevistas")
+
+    def _get_entrevista_estado(self, perfil: str, params: dict) -> None:
+        """El cartel de "analizando", que la página pregunta cada 4 segundos.
+
+        Cuando el análisis termina (bien o mal) contesta `HX-Refresh: true` y
+        htmx recarga la página entera, que ya trae el repaso o el error.
+        """
+        datos = ent.leer(perfil, (params.get("id") or [""])[0])
+        if datos.get("estado") not in ("subida", "procesando"):
+            return self._responder(b"", extra={"HX-Refresh": "true"})
+        self._html(render.estado_en_curso(perfil, datos))
+
+    def _post_entrevista_subir(self) -> None:
+        """Recibe la grabación como cuerpo del pedido y la escribe a disco.
+
+        Un video de Meet de una hora pesa cientos de MB: se escribe de a 1 MB,
+        sin cargarlo entero en memoria. Los datos de la entrevista vienen en la
+        URL porque el cuerpo es el archivo (lo arma `subirEntrevista` en
+        `app.js`). Contesta JSON con la dirección del repaso, adonde el
+        navegador va solo.
+        """
+        params = parse_qs(urlparse(self.path).query)
+        uno = lambda clave: (params.get(clave) or [""])[0]  # noqa: E731
+        perfil = uno("perfil")
+
+        def error(texto: str, codigo: int = 400) -> None:
+            # Lo que no se leyó del cuerpo queda en el socket: se cierra la
+            # conexión para que no se mezcle con el pedido siguiente.
+            self.close_connection = True
+            self._responder(json.dumps({"error": texto}).encode("utf-8"),
+                            tipo="application/json", codigo=codigo)
+
+        if perfil not in data.perfiles():
+            return error("Ese perfil no existe.")
+        largo = int(self.headers.get("Content-Length") or 0)
+        if largo <= 0:
+            return error("No llegó ninguna grabación.")
+        if largo > ent.TAMANIO_MAXIMO:
+            return error("La grabación pesa más de 4 GB. Cortala en partes.", 413)
+        try:
+            datos = ent.nueva(perfil, uno("empresa"), uno("fecha"), uno("archivo"))
+        except ent.ErrorDeEntrevista as e:
+            return error(str(e))
+
+        destino = ent.ruta_de_la_grabacion(perfil, datos)
+        falta = largo
+        with destino.open("wb") as archivo:
+            while falta > 0:
+                pedazo = self.rfile.read(min(1024 * 1024, falta))
+                if not pedazo:
+                    break
+                archivo.write(pedazo)
+                falta -= len(pedazo)
+        if falta > 0:
+            ent.borrar(perfil, datos["id"])
+            return error("La subida se cortó antes de terminar. Probá de nuevo.")
+
+        ent.arrancar(perfil, datos["id"])
+        logger.info("[ui] Entrevista subida: %s (%d MB)", datos["id"], largo // 1_000_000)
+        url = f"/entrevistas?{urlencode({'perfil': perfil, 'id': datos['id']})}"
+        self._responder(json.dumps({"url": url}).encode("utf-8"), tipo="application/json")
 
     def _get_corrida(self, perfil: str, params: dict) -> None:
         """El cartel del pie de la barra lateral, recién armado.
@@ -452,6 +541,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         ruta = urlparse(self.path).path.rstrip("/") or "/"
+        # Antes de `_form()`: el cuerpo de este pedido es la grabación entera,
+        # y `_form()` lo leería todo a memoria para tratarlo como un formulario.
+        if ruta == "/entrevista-subir":
+            return self._post_entrevista_subir()
         form = self._form()
         perfil = form.get("perfil", "")
 
@@ -513,6 +606,22 @@ class Handler(BaseHTTPRequestHandler):
                 )
             if ruta == "/perfil-borrar":
                 return self._post_borrar_perfil(form)
+            if ruta == "/entrevista-vincular":
+                ent.vincular(perfil, form.get("id", ""), form.get("url", ""))
+                return self._redirigir("/entrevistas", perfil=perfil, id=form.get("id", ""),
+                                       ok="Listo, quedó vinculada. Si querés que el "
+                                          "repaso tenga en cuenta el aviso, tocá "
+                                          "Volver a analizar.")
+            if ruta == "/entrevista-analizar":
+                datos = ent.leer(perfil, form.get("id", ""))
+                if datos.get("estado") not in ("subida", "procesando"):
+                    ent.arrancar(perfil, datos["id"])
+                return self._redirigir("/entrevistas", perfil=perfil, id=datos["id"])
+            if ruta == "/entrevista-borrar":
+                datos = ent.leer(perfil, form.get("id", ""))
+                ent.borrar(perfil, datos["id"])
+                return self._redirigir("/entrevistas", perfil=perfil,
+                                       ok=f"Borré la entrevista con {datos['empresa']}.")
         except (ValueError, FileNotFoundError) as e:
             return self._redirigir(_pantalla_del_post(ruta), perfil=perfil, error=str(e))
         except ConnectionError:         # el navegador se fue: lo ataja handle()
@@ -817,7 +926,8 @@ class Handler(BaseHTTPRequestHandler):
     #: esto son 1800 líneas por hora y por pestaña abierta, en el mismo archivo
     #: del que sale el panel "Cómo viene funcionando": el registro se infla y
     #: encontrar un error de verdad ahí adentro se vuelve imposible.
-    _SIN_REGISTRAR = ("/corrida", "/estilos.css", "/app.js", "/htmx.min.js")
+    _SIN_REGISTRAR = ("/corrida", "/estilos.css", "/app.js", "/htmx.min.js",
+                      "/entrevista-estado")
 
     def log_message(self, formato, *args):
         """Al log del proyecto, no a stderr: con pythonw no hay consola."""
@@ -847,6 +957,8 @@ def _pantalla_del_post(ruta: str) -> str:
     """
     if ruta in ("/configuracion", "/perfil-nuevo", "/perfil-borrar"):
         return "/configuracion"
+    if ruta.startswith("/entrevista"):
+        return "/entrevistas"
     return "/datos"
 
 

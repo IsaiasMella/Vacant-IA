@@ -48,6 +48,11 @@ from vacantia.ui.render.comun import (  # noqa: F401
     estatico,
 )
 from vacantia.ui.render.mensajes_y_consejo import consejo, linea_de_cv, mensajes  # noqa: F401
+from vacantia.ui.render.pestania_entrevistas import (  # noqa: F401
+    entrevista,
+    entrevistas,
+    estado_en_curso,
+)
 from vacantia.ui.render.pestania_linkedin import PESTANIAS_LINKEDIN, linkedin  # noqa: F401
 from vacantia.ui.render.pestania_metricas import (  # noqa: F401
     ESCRITOS_A_LA_VISTA,

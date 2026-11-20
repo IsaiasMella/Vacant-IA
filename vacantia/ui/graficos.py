@@ -118,6 +118,12 @@ def columnas(datos: list[dict], unidad: str = "ofertas") -> str:
             clase += " destacada"
         if not valor:
             clase += " vacia"
+        # `futura`: un día de esta semana que todavía no llegó. No es un día en
+        # blanco, es un día que no pasó, y no tiene que leerse como un cero.
+        if d.get("futura"):
+            clase += " futura"
+        if d.get("hoy"):
+            clase += " hoy"
         detalle = _esc(f"{etiqueta}: {valor} {unidad}")
         columnas_html.append(
             f'<div class="{clase}" title="{detalle}">'

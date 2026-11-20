@@ -797,6 +797,10 @@ def test_la_fecha_de_marcado_se_lee_en_la_hora_de_aca(sitio):
     assert _cuando_marcada({"fecha_feedback": hoy})[0] == "hoy"
     assert _cuando_marcada({"fecha_feedback": ""})[0] == ""
 
+    # De anteayer para atrás dice el día de la semana y no "hace N días": lo que
+    # Isaías quiere saber es si mandó un lunes o un jueves (20/11/2026).
+    assert _cuando_marcada({"fecha_feedback": "2026-11-17"})[0] == "el mar 17/11"
+
 
 def test_las_fuentes_las_sirve_la_app_y_nunca_un_cdn(sitio):
     """La máquina puede estar sin internet, y una fuente que tarda tres segundos

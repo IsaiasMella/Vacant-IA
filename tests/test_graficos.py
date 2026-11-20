@@ -6,7 +6,7 @@ marcado diga lo que tiene que decir; que se vea bien hay que mirarlo en la
 pantalla, y eso se hizo.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from vacantia.ui import data
 from vacantia.ui.graficos import MINIMO_PARA_GRAFICAR, barras, columnas, vale_un_grafico
@@ -176,6 +176,18 @@ def test_una_columna_en_cero_se_dibuja_igual():
 
 # --- el contador de postulaciones -------------------------------------------
 
+def _el_dia(dia, hora=12):
+    """Un momento de ese día, en la hora de acá. Para armar postulaciones en un
+    día de la semana conocido sin depender de qué día se corre el test."""
+    return datetime(dia.year, dia.month, dia.day, hora).astimezone()
+
+
+def _este_lunes():
+    from vacantia.ui.semanas import lunes_de
+
+    return lunes_de(date.today())
+
+
 def _aplicada(url, cuando):
     return {"url": url, "title": f"Oferta {url}", "score": 80, "aplicado": True,
             "fecha_feedback": cuando.astimezone(timezone.utc).isoformat(),
@@ -183,20 +195,26 @@ def _aplicada(url, cuando):
 
 
 def test_cuenta_las_postulaciones_del_periodo_elegido(sitio):
+    """Los períodos son semanas de calendario, de lunes a domingo: el domingo
+    pasado es "Semana pasada" aunque haya sido ayer."""
     base, tmp = sitio
-    ahora = datetime.now().astimezone()
+    lunes = _este_lunes()
     _con_historial(tmp, [
-        _aplicada("hoy", ahora),
-        _aplicada("hace5", ahora - timedelta(days=5)),
-        _aplicada("hace20", ahora - timedelta(days=20)),
-        _aplicada("hace70", ahora - timedelta(days=70)),
+        _aplicada("hoy", datetime.now().astimezone()),
+        _aplicada("domingo", _el_dia(lunes - timedelta(days=1))),
+        _aplicada("hace2sem", _el_dia(lunes - timedelta(days=10))),
+        _aplicada("hace2meses", _el_dia(lunes - timedelta(days=60))),
+        _aplicada("hace4meses", _el_dia(lunes - timedelta(days=120))),
     ])
-    assert data.aplicadas_en("test", "7d")["cuantas"] == 2
-    assert data.aplicadas_en("test", "30d")["cuantas"] == 3
-    assert data.aplicadas_en("test", "90d")["cuantas"] == 4
-    assert data.aplicadas_en("test", "todo")["cuantas"] == 4
-    # Un período inventado cae en el de siempre y no rompe.
-    assert data.aplicadas_en("test", "cualquiera")["periodo"] == data.PERIODO_POR_DEFECTO
+    assert data.aplicadas_en("test", "semana")["cuantas"] == 1
+    assert data.aplicadas_en("test", "semana-pasada")["cuantas"] == 1
+    assert data.aplicadas_en("test", "4-semanas")["cuantas"] == 3
+    assert data.aplicadas_en("test", "3-meses")["cuantas"] == 4
+    assert data.aplicadas_en("test", "todo")["cuantas"] == 5
+    # Un período inventado, o uno de los viejos guardado en un link, cae en el
+    # de siempre y no rompe.
+    for viejo in ("cualquiera", "30d", "7d"):
+        assert data.aplicadas_en("test", viejo)["periodo"] == data.PERIODO_POR_DEFECTO
 
 
 def test_la_fecha_de_postulacion_se_lee_en_la_hora_de_aca(sitio):
@@ -205,10 +223,10 @@ def test_la_fecha_de_postulacion_se_lee_en_la_hora_de_aca(sitio):
     base, tmp = sitio
     ahora = datetime.now().astimezone()
     _con_historial(tmp, [_aplicada("ahora", ahora)])
-    resultado = data.aplicadas_en("test", "7d")
+    resultado = data.aplicadas_en("test", "semana")
     assert resultado["cuantas"] == 1
-    # Y cae en la última semana del reparto, no en la siguiente.
-    assert resultado["reparto"][-1][1] == 1
+    # Y cae en el día de hoy, no en el siguiente.
+    assert resultado["reparto"][date.today().weekday()][1] == 1
 
 
 def test_el_reparto_por_semana_es_lo_que_hace_que_el_total_signifique_algo(sitio):
@@ -217,12 +235,14 @@ def test_el_reparto_por_semana_es_lo_que_hace_que_el_total_signifique_algo(sitio
     base, tmp = sitio
     ahora = datetime.now().astimezone()
     _con_historial(tmp, [_aplicada(f"n{i}", ahora) for i in range(9)])
-    resultado = data.aplicadas_en("test", "30d")
+    resultado = data.aplicadas_en("test", "4-semanas")
     assert resultado["cuantas"] == 9
     semanas = resultado["reparto"]
-    assert len(semanas) == 5                       # 30 días, redondeado a semanas
+    assert len(semanas) == 4                       # cuatro semanas de lunes a domingo
     assert semanas[-1][1] == 9                     # todas en la de esta semana
     assert sum(n for _, n in semanas[:-1]) == 0
+    # En la grilla, la de esta semana va arriba.
+    assert resultado["grilla"][0]["total"] == 9
 
 
 def test_el_contador_va_grande_en_verde_en_sin_marcar(sitio):
@@ -237,7 +257,7 @@ def test_el_contador_va_grande_en_verde_en_sin_marcar(sitio):
     assert 'class="postulaciones"' in home
     assert '<span class="numero">3</span>' in home
     assert "trabajos a los que apliqué" in home    # el color nunca va solo
-    assert "Último mes" in home                     # el período, a la vista
+    assert "Últimas 4 semanas" in home              # el período, a la vista
 
 
 def test_el_cartel_de_arriba_habla_de_la_pestania_en_la_que_estas(sitio):
@@ -260,7 +280,7 @@ def test_el_cartel_de_arriba_habla_de_la_pestania_en_la_que_estas(sitio):
     assert '<span class="numero">3</span>' in aplique
     assert "sólo las de esta lista" in aplique
     # Y sigue habiendo selector de período: es la misma pregunta, otro recorte.
-    assert "Último mes" in aplique
+    assert "Últimas 4 semanas" in aplique
 
     for otra in ("filtradas", "archivadas", "todas"):
         assert 'class="postulaciones"' not in get(
@@ -298,7 +318,7 @@ def test_en_descarte_el_cartel_dice_por_que_y_no_cuantas(sitio):
     assert "Es presencial y no puedo ir" in html
     # El texto libre no es "otro": es el descarte que dice algo del puesto.
     assert "Escrito a mano" in html
-    assert "Último mes" in html
+    assert "Últimas 4 semanas" in html
 
 
 def test_metricas_muestra_lo_que_escribiste_a_mano(sitio):
@@ -392,11 +412,11 @@ def test_el_selector_de_periodo_anda_sin_javascript(sitio):
     """Es un `form method=get` con su botón, que el `onchange` sólo adelanta."""
     base, tmp = sitio
     ahora = datetime.now().astimezone()
-    _con_historial(tmp, [_aplicada("hace20", ahora - timedelta(days=20))])
+    _con_historial(tmp, [_aplicada("hace2sem", _el_dia(_este_lunes() - timedelta(days=10)))])
 
-    _, mes, _ = get(base, "/trabajos?perfil=test&apliq=30d")
+    _, mes, _ = get(base, "/trabajos?perfil=test&apliq=4-semanas")
     assert '<span class="numero">1</span>' in mes
-    _, semana, _ = get(base, "/trabajos?perfil=test&apliq=7d")
+    _, semana, _ = get(base, "/trabajos?perfil=test&apliq=semana")
     assert '<span class="numero">0</span>' in semana
     assert "<noscript><button>Ver el período</button></noscript>" in semana
     # El período viaja con el resto de los filtros, no los pisa.
@@ -474,22 +494,58 @@ def test_una_semana_se_reparte_por_dia_y_no_por_semana(sitio):
     ahora = datetime.now().astimezone()
     _con_historial(tmp, [_aplicada(f"n{i}", ahora) for i in range(3)])
 
-    semana = data.aplicadas_en("test", "7d")
+    semana = data.aplicadas_en("test", "semana")
     assert semana["unidad"] == "día"
     assert len(semana["reparto"]) == 7
-    assert semana["reparto"][-1][1] == 3           # las tres son de hoy
+    # De lunes a domingo y con el nombre del día (20/11/2026): con ventanas para
+    # atrás desde hoy, las barras salían rotuladas "24/10".
+    assert semana["reparto"][0][0].startswith("Lun ")
+    assert semana["reparto"][6][0].startswith("Dom ")
+    assert semana["reparto"][date.today().weekday()][1] == 3   # las tres son de hoy
     assert sum(n for _, n in semana["reparto"]) == 3
+    # Los días que todavía no llegaron van marcados, para no leerse como ceros.
+    assert [d["futuro"] for d in semana["dias"]].count(True) == 6 - date.today().weekday()
+    assert data.aplicadas_en("test", "semana-pasada")["unidad"] == "día"
 
-    # De 14 días para arriba vuelve a ser por semana: catorce o noventa barras
-    # diarias no se leen, y ahí la pregunta ya es la del ritmo.
-    for periodo, barras in (("14d", 2), ("30d", 5), ("90d", 12), ("todo", 12)):
+    # Con varias semanas es la grilla: una fila por semana, de lunes a domingo.
+    # Catorce o noventa barras diarias no se leen; la grilla sí.
+    for periodo, filas in (("4-semanas", 4), ("3-meses", 13)):
         largo = data.aplicadas_en("test", periodo)
         assert largo["unidad"] == "semana", periodo
-        assert len(largo["reparto"]) == barras, periodo
+        assert len(largo["grilla"]) == filas, periodo
+        assert len(largo["reparto"]) == filas, periodo
+        assert all(len(f["dias"]) == 7 for f in largo["grilla"])
+
+    # "Desde que empecé" arranca el lunes de la primera postulación: si todas
+    # son de esta semana, es la semana sola.
+    assert len(data.aplicadas_en("test", "todo")["reparto"]) == 7
 
     # Y nunca una barra sola: no hay período que no se pueda comparar consigo.
     for clave, _, _ in data.PERIODOS:
         assert len(data.aplicadas_en("test", clave)["reparto"]) >= 2, clave
+
+
+def test_varias_semanas_se_ven_como_grilla_de_lunes_a_domingo(sitio):
+    """Lo que pidió Isaías el 20/11/2026: ver qué días manda y qué semanas aflojó."""
+    base, tmp = sitio
+    lunes_pasado = _este_lunes() - timedelta(days=7)
+    martes_pasado = lunes_pasado + timedelta(days=1)
+    _con_historial(tmp, [
+        _aplicada("a", _el_dia(martes_pasado)),
+        _aplicada("b", _el_dia(martes_pasado, 15)),
+    ])
+    _, html, _ = get(base, "/trabajos?perfil=test&apliq=4-semanas")
+    assert '<table class="semanas"' in html
+    for dia in ("Semana", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom", "Total"):
+        assert f'<th scope="col">{dia}</th>' in html
+    assert f"Semana del {lunes_pasado.day}/{lunes_pasado.month}" in html
+    # El martes pasado, en verde y con el 2.
+    assert f'<td class="con" title="Mar {martes_pasado.day}">2</td>' in html
+
+    # Con una semana sola, siete barras con el nombre del día y sin grilla.
+    _, una, _ = get(base, "/trabajos?perfil=test&apliq=semana-pasada")
+    assert '<table class="semanas"' not in una
+    assert f"Mar {martes_pasado.day}" in una
 
 
 def test_el_selector_de_periodo_no_se_mueve_de_arriba_a_la_derecha(sitio):
@@ -508,9 +564,9 @@ def test_el_selector_de_periodo_no_se_mueve_de_arriba_a_la_derecha(sitio):
     assert ".postulaciones .vacio-corto { grid-area: reparto;" in CSS
 
     # Con datos y sin datos, el selector se dibuja siempre.
-    _, vacio, _ = get(base, "/trabajos?perfil=test&ver=pendientes&apliq=7d")
+    _, vacio, _ = get(base, "/trabajos?perfil=test&ver=pendientes&apliq=semana")
     _con_historial(tmp, [_aplicada("n", ahora)])
-    _, lleno, _ = get(base, "/trabajos?perfil=test&ver=pendientes&apliq=7d")
+    _, lleno, _ = get(base, "/trabajos?perfil=test&ver=pendientes&apliq=semana")
     for html in (vacio, lleno):
         assert 'class="periodo"' in html
         assert 'id="cuando-apliq"' in html

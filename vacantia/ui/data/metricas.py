@@ -3,7 +3,9 @@
 Cuántas apliqué y cuándo, por qué descarté, cuántas entran por día, qué
 habilidades piden los avisos, cómo se reparten los puntajes, y lo que se pierde
 por no saber inglés. Todo se calcula al leer, sobre el historial. Vivía en
-`ui/data.py`; se separó sin cambiar nada (ver `ui/data/__init__.py`).
+`ui/data.py`; se separó sin cambiar nada (ver `ui/data/__init__.py`). Después,
+el 20/11/2026, los períodos de Apliqué y Descarté pasaron a semanas de lunes a
+domingo (ver `ui/semanas.py`).
 """
 
 import json
@@ -16,6 +18,7 @@ from vacantia.models import Job
 from vacantia.motivos import MOTIVOS, clave_de_motivo
 from vacantia.state import State
 
+from vacantia.ui import semanas
 from vacantia.ui.data.configuracion import leer_perfil
 from vacantia.ui.data.historial import (_entra_por_fecha, _sin_marcar, escritos_a_mano,
                                         filtros_del_perfil, motivos_del_sistema)
@@ -109,17 +112,11 @@ def estadisticas(nombre_perfil: str, desde: str = "todo") -> dict:
 # de la lista: los otros contadores dicen cuántas ofertas hay, éste dice cuántas
 # veces te postulaste.
 
-#: Los períodos del selector, en días. `0` es "desde que empezaste".
-PERIODOS = (
-    ("7d", "Últimos 7 días", 7),
-    ("14d", "Últimas 2 semanas", 14),
-    ("30d", "Último mes", 30),
-    ("60d", "Últimos 2 meses", 60),
-    ("90d", "Últimos 3 meses", 90),
-    ("todo", "Desde que empecé", 0),
-)
+#: Los períodos del selector. Son semanas de calendario, de lunes a domingo: ver
+#: `vacantia/ui/semanas.py`, que explica por qué dejaron de ser "últimos N días".
+PERIODOS = semanas.PERIODOS
 
-PERIODO_POR_DEFECTO = "30d"
+PERIODO_POR_DEFECTO = semanas.PERIODO_POR_DEFECTO
 
 
 def _dia_local(marca) -> date | None:
@@ -139,24 +136,29 @@ def _dia_local(marca) -> date | None:
     return (momento.astimezone().date() if momento.tzinfo else momento.date())
 
 
-def _dias_del_periodo(periodo: str) -> int:
-    return dict((clave, dias) for clave, _, dias in PERIODOS).get(periodo, 30)
-
-
 def aplicadas_en(nombre_perfil: str, periodo: str = PERIODO_POR_DEFECTO,
                  solo_de_la_lista: bool = False) -> dict:
-    """Cuántas postulaciones en ese período, y cómo se repartieron en el tiempo.
+    """Cuántas postulaciones en ese período, y qué días.
 
-    {cuantas, a_mano, periodo, etiqueta, reparto: [(etiqueta, cuantas)],
-     unidad, desde}
+    {cuantas, a_mano, periodo, etiqueta, desde, hasta, unidad,
+     reparto: [(etiqueta, cuantas)], dias: [...] (una semana),
+     grilla: [...] (varias semanas)}
 
-    El `reparto` es lo que hace que el número signifique algo: 12 postulaciones
-    en un mes puede ser tres semanas sin hacer nada y una a los tiros, y eso es
-    exactamente lo que conviene ver.
+    **Semanas de lunes a domingo** (20/11/2026). Antes eran ventanas para atrás
+    desde hoy, y una "semana" arrancaba cualquier día: las barras salían
+    rotuladas "24/10" y no se sabía qué día era. Isaías pidió ver qué días manda.
 
-    La `unidad` es "día" para el período de una semana y "semana" para los
-    demás: con siete días, repartir por semana da una barra sola, que no compara
-    con nada.
+    * **Una semana** (esta o la pasada): siete barras con el nombre del día,
+      `Lun 16 … Dom 22`. Los días que todavía no pasaron van marcados como
+      `futuro`, para mostrarlos apagados y no como días en blanco.
+    * **Varias semanas**: la grilla, una fila por semana y una columna por día,
+      la de hoy arriba. Contesta las dos preguntas a la vez: qué días mandás y
+      qué semanas aflojaste.
+
+    El `reparto` sigue: con una semana son los siete días, con varias el total
+    de cada semana de la más vieja a la más nueva. Es lo que suma igual que
+    `cuantas`, y lo usan los tests que cuidan que las barras y el número no se
+    contradigan.
 
     Con `solo_de_la_lista` quedan afuera las que se contaron a mano desde un
     posteo de LinkedIn. Es lo que se muestra parado en la pestaña **Apliqué**:
@@ -165,70 +167,46 @@ def aplicadas_en(nombre_perfil: str, periodo: str = PERIODO_POR_DEFECTO,
     """
     from vacantia.ui import linkedin_urls
 
-    if periodo not in dict((c, e) for c, e, _ in PERIODOS):
-        periodo = PERIODO_POR_DEFECTO
-    dias = _dias_del_periodo(periodo)
+    periodo = semanas.periodo_valido(periodo)
     hoy = date.today()
-    desde = hoy - timedelta(days=dias - 1) if dias else None
 
-    fechas: list[date] = []
+    todas: list[date] = []
     for h in State(nombre_perfil).load_history():
         if h.get("aplicado") is not True:
             continue
-        cuando = _dia_local(h.get("fecha_feedback"))
-        if cuando is None or (desde is not None and cuando < desde):
-            continue
-        fechas.append(cuando)
+        if (cuando := _dia_local(h.get("fecha_feedback"))) is not None:
+            todas.append(cuando)
 
     # Y las que se aplicaron desde un posteo de LinkedIn, que no pasaron por
     # ninguna oferta de la lista y por lo tanto no están en el historial. Se
     # cuentan aparte para poder decirlo en la pantalla: si el total sube y no
     # hay ninguna tarjeta marcada, hay que poder explicar de dónde salió.
-    a_mano = 0
-    for marca in linkedin_urls.postulaciones(nombre_perfil):
-        cuando = _dia_local(marca)
-        if cuando is None or (desde is not None and cuando < desde):
-            continue
-        a_mano += 1
-        if not solo_de_la_lista:
-            fechas.append(cuando)
-    if solo_de_la_lista:
-        a_mano = 0
+    a_mano_todas = [c for m in linkedin_urls.postulaciones(nombre_perfil)
+                    if (c := _dia_local(m)) is not None]
+    if not solo_de_la_lista:
+        todas += a_mano_todas
 
-    # **Una semana se reparte por día, no por semana.** Con el período de 7
-    # días el reparto semanal daba una sola barra, y una sola barra no compara
-    # nada: la pantalla mostraba el número grande y abajo un vacío. Por día son
-    # siete barras y contestan lo que se pregunta en una semana, que es qué días
-    # mandaste y cuáles se te fueron en blanco.
-    #
-    # De 14 días para arriba vuelve a ser por semana: catorce o noventa barras
-    # diarias no se leen, y ahí la pregunta ya es otra, la del ritmo.
-    if dias and dias <= 7:
-        unidad, paso, cuantos = "día", 1, dias
-    else:
-        unidad, paso = "semana", 7
-        # La ventana se corta en semanas cerradas para que las barras sean
-        # comparables entre sí: la última siempre está incompleta, pero es la de
-        # hoy y se entiende. Sin ventana, se muestran las últimas 12.
-        cuantos = max(2, min(12, -(-dias // 7))) if dias else 12
+    desde, hasta = semanas.rango(periodo, hoy, primera=min(todas, default=None))
+    fechas = [f for f in todas if desde <= f <= hasta]
+    a_mano = 0 if solo_de_la_lista else sum(1 for f in a_mano_todas if desde <= f <= hasta)
 
-    arranque = hoy - timedelta(days=cuantos * paso - 1)
-    reparto = []
-    for i in range(cuantos):
-        inicio = arranque + timedelta(days=i * paso)
-        fin = inicio + timedelta(days=paso - 1)
-        cuantas = sum(1 for f in fechas if inicio <= f <= fin)
-        reparto.append((f"{inicio.day}/{inicio.month}", cuantas))
-
-    return {
+    salida = {
         "cuantas": len(fechas),
         "a_mano": a_mano,
         "periodo": periodo,
-        "etiqueta": dict((c, e) for c, e, _ in PERIODOS)[periodo],
-        "reparto": reparto,
-        "unidad": unidad,
-        "desde": desde.isoformat() if desde else "",
+        "etiqueta": semanas.etiqueta(periodo),
+        "desde": desde.isoformat(),
+        "hasta": hasta.isoformat(),
     }
+    if (hasta - desde).days < 7:
+        dias = semanas.dias(fechas, desde, hoy)
+        salida.update(unidad="día", dias=dias, grilla=[],
+                      reparto=[(d["etiqueta"], d["cuantas"]) for d in dias])
+    else:
+        grilla = semanas.grilla(fechas, desde, hasta, hoy)
+        salida.update(unidad="semana", dias=[], grilla=grilla,
+                      reparto=[(f["rotulo"], f["total"]) for f in reversed(grilla)])
+    return salida
 
 
 def descartadas_en(nombre_perfil: str, periodo: str = PERIODO_POR_DEFECTO) -> dict:
@@ -246,10 +224,12 @@ def descartadas_en(nombre_perfil: str, periodo: str = PERIODO_POR_DEFECTO) -> di
     `motivos` viene ordenado de mayor a menor y con las etiquetas ya en
     castellano, listo para el gráfico de barras.
     """
-    if periodo not in dict((c, e) for c, e, _ in PERIODOS):
-        periodo = PERIODO_POR_DEFECTO
-    dias = _dias_del_periodo(periodo)
-    desde = date.today() - timedelta(days=dias - 1) if dias else None
+    periodo = semanas.periodo_valido(periodo)
+    # Las mismas semanas de lunes a domingo que Apliqué: el selector es uno solo.
+    # "Desde que empecé" no necesita la primera fecha: acá no hay grilla que armar.
+    desde, hasta = semanas.rango(periodo, date.today())
+    if periodo == "todo":
+        desde = None
 
     motivos: Counter = Counter()
     for h in State(nombre_perfil).load_history():
@@ -258,7 +238,7 @@ def descartadas_en(nombre_perfil: str, periodo: str = PERIODO_POR_DEFECTO) -> di
         # Se filtra por cuándo LA DESCARTASTE, no por cuándo se publicó el
         # aviso: la pregunta es qué venís rechazando últimamente.
         cuando = _dia_local(h.get("fecha_feedback"))
-        if desde is not None and (cuando is None or cuando < desde):
+        if desde is not None and (cuando is None or not desde <= cuando <= hasta):
             continue
         motivos[clave_de_motivo(h) or "otro"] += 1
 
@@ -272,7 +252,7 @@ def descartadas_en(nombre_perfil: str, periodo: str = PERIODO_POR_DEFECTO) -> di
     return {
         "cuantas": sum(motivos.values()),
         "periodo": periodo,
-        "etiqueta": dict((c, e) for c, e, _ in PERIODOS)[periodo],
+        "etiqueta": semanas.etiqueta(periodo),
         "motivos": filas,
         "desde": desde.isoformat() if desde else "",
     }

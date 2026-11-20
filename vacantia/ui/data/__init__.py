@@ -76,6 +76,7 @@ from vacantia.ui.data.historial import (  # noqa: F401
     _sin_marcar,
     archivar,
     buscar_oferta,
+    ofertas_de_la_empresa,
     clave_de_motivo,
     como_job,
     consejo_con_llm,

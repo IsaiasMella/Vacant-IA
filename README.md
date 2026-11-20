@@ -73,7 +73,7 @@ contraseña y nadie más la puede ver.
 
 A la izquierda, fija, la barra de navegación: arriba el perfil (cada persona de
 la casa tiene el suyo), después **Trabajos** y **LinkedIn URLs**, y abajo,
-separadas, **Métricas** y **Mi perfil**. **Configuración** va al pie de todo,
+separadas, **Entrevistas**, **Métricas** y **Mi perfil**. **Configuración** va al pie de todo,
 abajo del botón *Buscar ahora*: es lo que se carga una vez.
 
 Al pie de esa barra, siempre a la vista, **el estado del sistema**: cuándo buscó
@@ -127,14 +127,19 @@ se interrumpe.
 ### Trabajos
 
 Arriba de todo, **cuántos trabajos aplicaste**, grande y en verde, con un
-selector de período: última semana, dos semanas, un mes, dos meses, tres meses o
-desde que empezaste. El selector vive fijo arriba a la derecha y el reparto
-abajo, en el medio de la tarjeta.
+selector de período: esta semana (la que se ve al entrar), la semana pasada, las últimas 4 semanas, los
+últimos 3 meses o desde que empezaste. **Las semanas van de lunes a domingo**,
+siempre: "esta semana" arranca el lunes aunque hoy sea jueves. El selector vive
+fijo arriba a la derecha y el reparto abajo, en el medio de la tarjeta.
 
-**Con el período de una semana el reparto es por día**, siete barras, porque lo
-que se pregunta en una semana es qué días mandaste y cuáles se te fueron en
-blanco. De dos semanas para arriba vuelve a ser por semana, que ahí la pregunta
-es la del ritmo.
+- **Una semana sola**: siete barras con el nombre del día (`Lun 16` … `Dom 22`).
+  Hoy va resaltado, y los días que todavía no llegaron van apagados, sin cero:
+  no son días en blanco.
+- **Varias semanas**: una grilla, una fila por semana (la de hoy arriba) y una
+  columna por día, con el número en cada casilla y el total al final. De un
+  vistazo se ve qué días mandás y qué semanas aflojaste.
+
+En las tarjetas de Apliqué la fecha dice el día: *Aplicaste el mar 17/11*.
 
 Cuenta las dos cosas: las ofertas que marcaste **Apliqué** acá, y las que
 anotaste a mano en LinkedIn URLs. Cuando hay de las segundas, la línea de abajo
@@ -199,7 +204,7 @@ La lista va **ordenada por puntaje**, de la que mejor encaja a la que menos, y
 ninguna pestaña ni en los números de arriba, salvo en *Apliqué*: si le mandaste
 el CV a una de 40, la encontrás igual. No se borran: siguen guardadas para no
 volver a puntuarlas y cuentan en los gráficos de Métricas. El corte está en
-`PUNTAJE_PARA_MOSTRAR` (`vacantia/ui/data.py`). Es otro número que el
+`PUNTAJE_PARA_MOSTRAR` (`vacantia/ui/data/historial.py`). Es otro número que el
 `min_score`, que decide de cuánto para arriba te avisa por Telegram.
 
 Arriba hay dos filtros que se combinan:
@@ -319,6 +324,41 @@ favoritos y su propio anotador; lo confirmado en las dos pestañas suma al mismo
 contador de Trabajos. Sale de `estrategia-links-linkedin-pestana-jobs.md`, y la
 rutina de ese documento está en el signo de pregunta de *Tus búsquedas
 guardadas*.
+
+### Entrevistas
+
+Para repasar una entrevista grabada. Cargás **la empresa** (como te acuerdes),
+**la fecha** y **la grabación** (el video de Meet, Zoom o Teams, o un audio), y
+tocás *Analizar la entrevista*. Tarda unos minutos y podés seguir usando la
+pantalla; cuando termina, la página se actualiza sola.
+
+El repaso trae:
+
+- **Un resumen** de cómo fue.
+- **Pregunta por pregunta**: qué te preguntaron, qué respondiste, qué faltó y
+  **cómo responderla la próxima, sólo con lo que respalda tu CV**. Si preguntaron
+  algo que tu CV no muestra, te lo dice en vez de inventarte experiencia. Las
+  respuestas flojas vienen abiertas.
+- Lo que salió bien, qué corregir, **temas para repasar**, lo que preguntaste vos
+  y qué te convenía preguntar, y lo que dijeron que sigue.
+- La transcripción entera, plegada al final.
+
+**No hace falta saber por qué aviso fue.** Si en tu historial hay ofertas de esa
+empresa, te las propone (*¿Es por alguna de éstas?*); si elegís una, *Volver a
+analizar* la tiene en cuenta. Si mandaste el CV por un mensaje privado, el
+repaso sale igual.
+
+Lo que hay que saber:
+
+- **Hace falta ffmpeg**, que le saca el audio al video en tu computadora. Si no
+  está, la pantalla dice cómo instalarlo (`winget install Gyan.FFmpeg`).
+- **Sólo el audio sale de tu computadora**, a Gemini (Google), para pasarlo a
+  texto. En el plan gratis Google puede usarlo para mejorar sus productos. Se
+  borra de Google apenas se transcribe.
+- El video que subís se borra de `state/` después de transcribirlo; **tu archivo
+  original no se toca**. Quedan la transcripción y el análisis, en
+  `state/<perfil>/entrevistas/`.
+- Una hora de entrevista son unos 90.000 tokens de Gemini, dentro del plan gratis.
 
 ### Métricas
 
@@ -542,7 +582,7 @@ El motor no sabe nada de TinyFish ni de Telegram: sólo habla con las interfaces
 
 **La pantalla es un servidor de biblioteca estándar** que escribe sobre los
 mismos archivos que el motor: una sola fuente de verdad, sin sincronizar nada.
-El HTML se arma en `ui/render.py`, el CSS vive en `ui/css/*.css` y el JavaScript
+El HTML se arma en `ui/render/` (un módulo por pestaña), el CSS vive en `ui/css/*.css` y el JavaScript
 en `ui/static/`. Las actualizaciones parciales las hace
 [htmx](https://htmx.org/), servido desde la propia app y **nunca desde un CDN**,
 por lo mismo que las fuentes tipográficas: la máquina puede estar sin internet, y
@@ -1037,7 +1077,7 @@ el texto donde arrancan los ajenos.
 
 > ⚠️ **Computrabajo devolvía `403 Forbidden` en el navegador, y la causa era la
 > UI. Arreglado con `rel="noreferrer"` en los links al aviso** (ver
-> `ABRIR_EL_AVISO` en `ui/render.py`, que lleva la medición completa).
+> `ABRIR_EL_AVISO` en `ui/render/comun.py`, que lleva la medición completa).
 >
 > Al abrir un aviso desde la pantalla, el navegador mandaba el referrer
 > `http://127.0.0.1:8756`. Computrabajo lo guarda en su cookie `extrfr`, y desde
@@ -1253,11 +1293,14 @@ vacantia/
 ├── mensajes.py       los mensajes al reclutador (DM y mail)
 ├── consejo.py        qué reordenar del CV, sin reescribirlo
 ├── drafter.py        CV a medida (fuera del camino principal)
+├── entrevistas.py    repasar una entrevista grabada: ffmpeg, Gemini y el análisis
 ├── ui/
 │   ├── server.py     el servidor y las rutas
-│   ├── data.py       todo lo que toca disco
+│   ├── data/         todo lo que toca disco: configuracion, historial,
+│   │                 metricas y estado (un módulo por tema)
 │   ├── formulario.py las pestañas Mi perfil y Configuración
-│   ├── render.py     el HTML
+│   ├── render/       el HTML: comun, shell y un módulo por pestaña
+│   ├── semanas.py    semanas de lunes a domingo, para el contador de Apliqué
 │   ├── estilos.py    junta los .css de abajo y arma las @font-face
 │   ├── css/          el CSS, en archivos de verdad
 │   │   ├── tokens.css     los tokens de DESIGN.md, una sola vez
@@ -1267,7 +1310,8 @@ vacantia/
 │   │   ├── piezas.css     los componentes
 │   │   ├── buscando.css   el panel de "Buscando trabajo"
 │   │   ├── graficos.css   las barras de Métricas
-│   │   └── linkedin.css   el constructor de URLs
+│   │   ├── linkedin.css   el constructor de URLs
+│   │   └── entrevistas.css  la pestaña Entrevistas
 │   ├── static/
 │   │   ├── app.js         lo poco que htmx no cubre
 │   │   └── htmx.min.js    servido por la app, nunca desde un CDN

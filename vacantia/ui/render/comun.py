@@ -51,6 +51,9 @@ ICONOS = {
     "estadisticas": _icono('<path d="M3 3v18h18"/><path d="M18 17V9"/>'
                            '<path d="M13 17V5"/><path d="M8 17v-3"/>'),
     "datos": _icono('<circle cx="12" cy="8" r="4.5"/><path d="M20 21a8 8 0 0 0-16 0"/>'),
+    # Una cámara de video: las entrevistas se graban en Meet, Zoom o Teams.
+    "entrevistas": _icono('<path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11"/>'
+                          '<rect x="2" y="6" width="14" height="12" rx="2"/>'),
     "configuracion": _icono('<path d="M20 7h-9"/><path d="M14 17H5"/>'
                             '<circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>'),
     "filtradas": _icono('<path d="M3 5h18l-7 8v6l-4 2v-8Z"/>'),

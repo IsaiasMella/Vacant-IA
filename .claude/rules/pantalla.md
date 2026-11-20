@@ -16,7 +16,7 @@ paths:
   - Azul: estado del sistema.
 - **Vidrio esmerilado:** sólo en tres lugares: barra lateral, tarjeta de oferta sin marcar y toast.
 - **Tarjeta de oferta:** dos controles visibles como máximo.
-- **Explicaciones largas:** van en el signo de pregunta con globo (`_ayuda_al_lado` en `render.py`), no sueltas en la pantalla.
+- **Explicaciones largas:** van en el signo de pregunta con globo (`_ayuda_al_lado` en `render/comun.py`), no sueltas en la pantalla.
 
 ## Cosas que ya se aprendieron
 

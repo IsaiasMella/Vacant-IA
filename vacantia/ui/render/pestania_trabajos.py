@@ -80,9 +80,13 @@ def _cuando_marcada(oferta: dict) -> tuple[str, str]:
     momento = _en_hora_local(oferta.get("fecha_feedback"))
     if momento is None:
         return "", ""
+    from vacantia.ui.semanas import dia_corto
+
+    # Con el día de la semana (20/11/2026): "hace 4 días" no dice si fue lunes o
+    # jueves, y eso es lo que Isaías quiere ver de sus postulaciones.
     dias = dias_desde(momento) or 0
-    cuando = ("hoy" if dias <= 0 else "ayer" if dias == 1 else f"hace {dias} días")
-    return cuando, f"El {momento.isoformat()}"
+    cuando = ("hoy" if dias <= 0 else "ayer" if dias == 1 else f"el {dia_corto(momento)}")
+    return cuando, f"El {dia_corto(momento)} ({momento.isoformat()}), hace {dias} días"
 
 
 def _select_de_motivos() -> str:
@@ -408,15 +412,18 @@ def _postulaciones(perfil: str, ver: str, desde: str, aplicadas: dict | None,
         # postulaciones en un mes puede ser tres semanas sin hacer nada y una a
         # los tiros, y eso no se ve en el total.
         #
-        # En una semana el reparto es por día y no por semana: repartir siete
-        # días en semanas daba una barra sola, que no compara con nada, y la
-        # tarjeta quedaba con el número grande y un vacío al lado.
-        tramos = [{"etiqueta": e, "cuantas": n}
-                  for e, n in aplicadas.get("reparto") or []]
-        por = "día" if aplicadas.get("unidad") == "día" else "semana"
-        cuerpo = (f'<div class="reparto" aria-label="Postulaciones por {por}">'
-                  f'{columnas(tramos, "postulaciones")}</div>'
-                  if len(tramos) > 1 else "")
+        # Semanas de lunes a domingo (20/11/2026): una semana sola son siete
+        # barras con el nombre del día; varias, la grilla de semanas por días.
+        # Antes eran ventanas para atrás desde hoy y las barras salían
+        # rotuladas "24/10", sin decir qué día era.
+        if aplicadas.get("unidad") == "día":
+            tramos = [{"etiqueta": d["etiqueta"], "cuantas": d["cuantas"],
+                       "futura": d["futuro"], "hoy": d["hoy"]}
+                      for d in aplicadas.get("dias") or []]
+            cuerpo = (f'<div class="reparto" aria-label="Postulaciones por día">'
+                      f'{columnas(tramos, "postulaciones")}</div>')
+        else:
+            cuerpo = _grilla_de_semanas(aplicadas.get("grilla") or [])
 
     trabajo = "trabajo" if cuantas == 1 else "trabajos"
     cuando = esc(aplicadas.get("etiqueta", ""))
@@ -439,6 +446,39 @@ def _postulaciones(perfil: str, ver: str, desde: str, aplicadas: dict | None,
   {selector}
   {cuerpo}
 </section>"""
+
+
+def _grilla_de_semanas(grilla: list[dict]) -> str:
+    """La tabla de semanas por días: una fila por semana, la de hoy arriba.
+
+    Es una tabla de verdad (`<table>` con encabezados) y no un gráfico, porque
+    lo que se lee es el número de cada casilla: "el martes mandé 2". Los días
+    que todavía no llegaron quedan vacíos, no en cero.
+    """
+    from vacantia.ui.semanas import DIAS
+
+    if not grilla:
+        return ""
+    cabecera = "".join(f'<th scope="col">{dia}</th>' for dia in DIAS)
+    filas = []
+    for fila in grilla:
+        celdas = []
+        for d in fila["dias"]:
+            clases = []
+            if d["cuantas"]:
+                clases.append("con")
+            if d["hoy"]:
+                clases.append("hoy")
+            clase = f' class="{" ".join(clases)}"' if clases else ""
+            texto = "" if d["futuro"] else str(d["cuantas"])
+            celdas.append(f'<td{clase} title="{esc(d["etiqueta"])}">{texto}</td>')
+        filas.append(f'<tr><th scope="row">{esc(fila["rotulo"])}</th>{"".join(celdas)}'
+                     f'<td class="total">{fila["total"]}</td></tr>')
+    return (f'<div class="semanas-scroll"><table class="semanas" '
+            f'aria-label="Postulaciones por semana y por día">'
+            f'<thead><tr><th scope="col">Semana</th>'
+            f'{cabecera}<th scope="col">Total</th></tr></thead>'
+            f'<tbody>{"".join(filas)}</tbody></table></div>')
 
 
 def _cartel_de_descartes(perfil: str, ver: str, desde: str,

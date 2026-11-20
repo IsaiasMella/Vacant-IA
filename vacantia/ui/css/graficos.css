@@ -64,6 +64,35 @@
 .postulaciones .vacio-corto { color: var(--color-text-secondary);
                               font-size: var(--text-body-sm);
                               max-width: var(--content-max-ch); }
+/* Una semana sola: el día de hoy con el nombre más fuerte, y los que todavía no
+   llegaron sin línea ni número. Un día que no pasó no es un día en blanco. */
+.columna.hoy .columna-nombre { color: var(--color-text-primary);
+                               font-weight: var(--weight-semibold); }
+.columna.futura .columna-relleno { background: transparent; }
+.columna.futura .columna-valor { visibility: hidden; }
+
+/* --- varias semanas: la grilla de lunes a domingo ---------------------------
+
+   Una fila por semana, la de hoy arriba, y una columna por día. Contesta las dos
+   preguntas a la vez: qué días mandás y qué semanas aflojaste. El número va en
+   verde sólo donde hay postulaciones, porque el verde es lo que ya hiciste; el
+   cero queda apagado, que también es un dato. */
+.semanas-scroll { grid-area: reparto; min-width: 0; overflow-x: auto; }
+.semanas { width: 100%; border-collapse: collapse;
+           font-size: var(--text-body-sm); font-variant-numeric: tabular-nums; }
+.semanas th, .semanas td { padding: var(--spacing-xs) var(--spacing-sm);
+                           text-align: center; }
+.semanas thead th { color: var(--color-text-secondary);
+                    font-weight: var(--weight-medium); }
+.semanas tbody th { text-align: left; white-space: nowrap;
+                    color: var(--color-text-secondary);
+                    font-weight: var(--weight-regular); }
+.semanas td { color: var(--color-text-tertiary); }
+.semanas td.con { color: var(--color-success); font-weight: var(--weight-semibold); }
+.semanas td.hoy { outline: var(--border-hairline) solid var(--color-success);
+                  outline-offset: calc(-1 * var(--border-hairline));
+                  border-radius: var(--rounded-sm); }
+.semanas .total { color: var(--color-text-primary); font-weight: var(--weight-semibold); }
 
 /* --- la misma tarjeta, parado en Descarté -----------------------------------
 
