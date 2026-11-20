@@ -9,7 +9,7 @@ tinyfish>=0.2.5
 # Opcional: sólo si usás llm.provider = "anthropic"
 # anthropic>=0.40.0
 
-# Fuente LinkedIn Jobs (sources/linkedin_jobs.py) — INSTALACIÓN ESPECIAL.
+# Fuentes LinkedIn Jobs e Indeed (sources/linkedin_jobs.py, sources/indeed.py) — INSTALACIÓN ESPECIAL.
 #
 # python-jobspy fija NUMPY==1.26.3, que no tiene wheel para Python 3.13+ e
 # intenta compilarse desde el código fuente. Sin un compilador de C instalado,

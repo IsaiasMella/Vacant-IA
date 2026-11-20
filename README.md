@@ -873,7 +873,7 @@ Las etapas, en orden:
 
 | Etapa | Qué es |
 |---|---|
-| `descartada_en_fuente` | la fuente la encontró y la tiró ella misma: aviso viejo, posteo que no es oferta, Indeed sin detalle |
+| `descartada_en_fuente` | la fuente la encontró y la tiró ella misma: aviso viejo, posteo que no es oferta. Lo que ya se había visto en otra corrida no se anota |
 | `trajo` | lo que la fuente devolvió al motor |
 | `ya_vista` / `duplicada` | por URL / por empresa + título (de otra corrida o de otra fuente) |
 | `cubierta` | la vacante dice que ya se cubrió |
@@ -895,6 +895,8 @@ diferida + puntuada.
 | `careers` | Páginas de empleo de las empresas de `companies.json` | `TINYFISH_API_KEY` | no |
 | `google_posts` | Publicaciones de LinkedIn indexadas por un buscador | `TINYFISH_API_KEY` (o Google CSE) | **no** |
 | `linkedin` | LinkedIn Jobs vía JobSpy | ninguna | **sí** |
+| `indeed` | Indeed Argentina, por la API de la app (vía JobSpy) | ninguna | no |
+| `getonbrd` | Get on Board, por su API pública | ninguna | no |
 | `rrhh` | Búsquedas de los reclutadores que seguís | `TINYFISH_API_KEY` | **no** |
 | `bumeran` / `zonajobs` / `computrabajo` | Portales de empleo argentinos | `TINYFISH_API_KEY` | no |
 | `dummy` | Ofertas de ejemplo para probar el pipeline | ninguna | no |
@@ -917,7 +919,8 @@ La resuelve `Source._resolver_antiguedad`, en este orden:
 `0` es un valor válido y no "sin configurar".
 
 Cada fuente la aplica como puede: `google_posts` y `rrhh` se la pasan al buscador
-(`recency_minutes` / `dateRestrict`), `linkedin` la traduce a `hours_old`, y los
+(`recency_minutes` / `dateRestrict`), `linkedin` e `indeed` la traducen a
+`hours_old`, `getonbrd` la aplica con la fecha que trae la API, y los
 portales argentinos filtran después de bajar el detalle, que es donde aparece la
 fecha. **Un aviso sin fecha nunca se descarta**: lo que no dice, no filtra.
 
@@ -1080,6 +1083,65 @@ Isaías al 12/9/2026.
 > cuello de botella**, que es el filtro de idioma y no el volumen. El detalle
 > con los números está en `NOTAS-PARA-ISAIAS.md`.
 
+### `indeed`
+
+Lee Indeed Argentina con JobSpy, el mismo paquete que `linkedin`, pero **no por
+la página web**: por la API que usa la app de Indeed. No necesita ninguna clave
+y no gasta TinyFish. Probado el 19/11/2026: 30 de 30 avisos completos en menos
+de un segundo, con empresa, fecha, si es remoto y la descripción entera.
+
+```jsonc
+{ "type": "indeed", "enabled": true,
+  "search_terms": ["AI Engineer", "Backend Python"],
+  "results_wanted": 50,      // por búsqueda; hasta 100 sigue siendo un solo pedido
+  "max_queries": 4,          // búsquedas por corrida, rotando los términos
+  "country": "argentina",    // opcional: el país, como lo nombra JobSpy
+  "location": "" }           // opcional: una ciudad; vacío = todo el país
+```
+
+- **La ventana de días** se la pide a Indeed (`hours_old`) y además se vuelve a
+  chequear con la fecha de cada aviso.
+- **"Sólo remoto" no se le pide.** JobSpy no deja combinarlo con la ventana de
+  días en Indeed, así que la modalidad la filtra `filters.py`, como en todas las
+  fuentes. "Desde casa" en la ubicación cuenta como remoto aunque Indeed no lo
+  marque.
+- **La dirección guardada es la de siempre** (`ar.indeed.com/viewjob?jk=...`):
+  lo que ya estaba en el historial sigue contando como visto.
+
+Hasta el 19/11/2026 se leía con TinyFish y Cloudflare no dejaba leer la mayoría
+de los avisos: en noviembre había corridas con 2 avisos legibles de 25.
+
+### `getonbrd`
+
+Get on Board, por su API pública: no scrapea nada y no necesita ninguna clave.
+Con `country_code: "AR"` trae lo que aplica a la Argentina, que en los hechos es
+casi todo remoto. Dos maneras de leerla:
+
+- **Por categoría**, con `"categorias"`: trae **todas** las ofertas activas de
+  esas categorías en cada corrida, sin términos ni rotación. Es la que conviene
+  para cualquier puesto de tecnología.
+- **Por términos**, sin `"categorias"`: la búsqueda con los puestos del perfil,
+  rotada por corrida. Para perfiles que no son de tecnología.
+
+```jsonc
+{ "type": "getonbrd", "enabled": true, "country_code": "AR",
+  "categorias": ["programming", "machine-learning-ai"],
+  "max_paginas": 3 }         // opcional: tope de páginas de 100 por categoría
+```
+
+Las categorías que existen: `programming`, `machine-learning-ai`,
+`data-science-analytics`, `sysadmin-devops-qa`, `mobile-developer`,
+`cybersecurity`, `design-ux`, `digital-marketing`, `sales`, `customer-support`,
+`operations-management`, `innovation-agile`, `technical-support`,
+`hardware-electronics`, `education-coaching`, `advertising-media`, `hr` y
+`other`.
+
+Por qué existe el modo por categoría: el 19/11/2026 había **101 ofertas activas
+para la Argentina en todo el portal**, 43 entre programación e IA, y buscándolas
+por 17 términos de a 3 por corrida se llegaba hasta 7 días tarde. 42 ofertas
+nunca se vieron mientras estaban frescas. Leyendo las dos categorías son 2
+pedidos por corrida y no se escapa ninguna.
+
 ## Empresas
 
 La lista de empresas alimenta la fuente `careers`. Se edita desde la pantalla. Las
@@ -1217,7 +1279,7 @@ vacantia/
 │   ├── linkedin_jobs.py   LinkedIn Jobs vía JobSpy
 │   ├── rrhh_profiles.py   los reclutadores que seguís
 │   ├── portales_ar.py     Bumeran / Zonajobs / Computrabajo
-│   ├── indeed.py          Indeed AR (Cloudflare: ver las notas)
+│   ├── indeed.py          Indeed AR, por la API de la app (vía JobSpy)
 │   ├── getonbrd.py        Get on Board, por su API pública
 │   └── dummy.py           ofertas de ejemplo, sin credenciales
 └── notifiers/

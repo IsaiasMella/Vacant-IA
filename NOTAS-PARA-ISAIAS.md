@@ -1,10 +1,10 @@
 # Notas para Isaías
 
-**733 tests pasan.**
+**740 tests pasan.**
 
 ```
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.venv\Scripts\python.exe -m pytest tests -q      →  733 passed
+.venv\Scripts\python.exe -m pytest tests -q      →  740 passed
 ```
 
 Andando todo: los 3 portales argentinos, Indeed, Get on Board, LinkedIn Jobs,
@@ -233,11 +233,10 @@ el idioma primero, porque el lugar lo deduce el modelo y ahí aparecen los error
 
 - **Get on Board:** API pública, sin token y sin TinyFish. Sigue trayendo aunque
   falte la clave de TinyFish. Se pide `country_code=AR`, y "Remote" en
-  `countries` se lee como modalidad, no como país.
-- **Indeed:** Cloudflare deja leer más o menos la mitad de los avisos, siempre
-  los mismos, así que el techo son unos 11 por corrida. No se puede paginar,
-  porque pide cuenta. Rinde buscar por más términos (`max_queries: 4`, rotando).
-  Se guarda `viewjob?jk=<id>` y no el link con token, que cambia en cada corrida.
+  `countries` se lee como modalidad, no como país. Desde el 19/11 se lee por
+  categoría (2.49).
+- **Indeed:** desde el 19/11 se lee con JobSpy, por la API de la app, y ya no
+  con TinyFish (2.49). Se sigue guardando `viewjob?jk=<id>`.
 
 ## 2.23, 2.27 y 2.35 a 2.38. Métricas
 
@@ -541,7 +540,45 @@ Salió de la investigación del 19/11/2026 (unas 1.000 ofertas de LinkedIn de lo
 redundantes según la investigación: LinkedIn "GenAI Engineer" y "AI Agent
 Engineer", Indeed "GenAI Engineer" y "Software Engineer Python", Get on Board
 "Python" y "LLM". Ocupan lugares de la rotación. No los toqué porque no estaban
-en el pedido.
+en el pedido. (Los de Get on Board ya no se usan: ahora lee por categoría, 2.49.)
+
+## 2.49. Indeed y Get on Board, arreglados
+
+Salió de mirar el embudo de la semana del 12 al 19/11. Las dos fuentes andaban
+mal por cómo las leíamos, no por el portal.
+
+- **Indeed, con JobSpy.** Con TinyFish, Cloudflare no dejaba leer la página de
+  cada aviso: 161 avisos distintos con "Indeed no dejó leer el aviso", y en
+  noviembre corridas de 2 legibles de 25. Ahora usa JobSpy, el mismo paquete de
+  LinkedIn, que lee la API de la app de Indeed. Probado el 19/11:
+  - Con "Python": 30 de 30 avisos completos en 0,8 s.
+  - Con tu perfil: 26 avisos con empresa, descripción y fecha en 9,6 s.
+  - **No gasta TinyFish** y trae la fecha, que antes no venía.
+  - La dirección guardada es la misma, así que tu historial sigue sirviendo.
+  - En tu perfil `results_wanted` pasó de 25 a 50: hasta 100 sigue siendo un solo
+    pedido. Se sacó `sort`, que era de la versión vieja.
+  - **"Sólo remoto" no se le pide:** JobSpy no lo deja combinar con la ventana
+    de días, así que lo filtra `filters.py`, como en el resto de las fuentes.
+- **Get on Board, por categoría.** Para la Argentina hay **101 ofertas activas
+  en todo el portal**, y 43 entre programación e IA. Las recorríamos con 17
+  términos de a 3 por corrida:
+  - Llegábamos hasta 7 días tarde.
+  - De las 89 tiradas por viejas, **42 nunca las habíamos visto**.
+
+  Ahora tu perfil tiene `"categorias": ["programming", "machine-learning-ai"]`:
+  son 2 pedidos por corrida, que traen todo. Sin `categorias`, la fuente busca
+  por términos como antes, que es lo que sirve para un perfil que no es de
+  tecnología. La empresa viene en el mismo pedido (`expand=["company"]`), así
+  que se ahorra una llamada por empresa.
+- **Lo que ya viste no se cuenta otra vez como descarte.** Get on Board tira por
+  vieja, en cada corrida, una oferta que vimos fresca hace dos semanas: 47 de
+  las 89. Ahora el motor no anota el descarte de una fuente si esa dirección ya
+  está en `seen_jobs.json`.
+
+**Para que decidas:** en la prueba del 19/11, de las 43 de Get on Board sólo 2
+eran de esta semana, y **23 tienen más de 7 días y nunca las viste**. Siguen
+abiertas. Si las querés ver una vez, poné `"max_age_days": 30` en el bloque de
+`getonbrd`: entran a puntuar unas 23, que son unas 4 llamadas al modelo.
 
 ## 2.42. Jev: probado y descartado por ahora
 

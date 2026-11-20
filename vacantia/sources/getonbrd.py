@@ -19,10 +19,36 @@ que trae son avisos presenciales en Santiago. Con `country_code=AR` devuelve los
 que aplican a la Argentina, que en los hechos son casi todos remotos: en la
 prueba, 60 de 60. Es exactamente el recorte que sirve acá.
 
-Lo que la API **no** trae en el listado es el nombre de la empresa: manda el id
-de la relación y hay que pedirlo aparte a `/companies/{id}`. Se resuelve con
-caché por corrida, porque varios avisos comparten empresa y sin el nombre el
-dedupe por empresa+título no corre (ver `Job.dedupe_key`).
+El nombre de la empresa no viene en el listado salvo que se pida con
+`expand=["company"]` (así, como arreglo JSON: `expand=company` devuelve 422).
+Verificado el 19/11/2026. Sin eso había que pedir `/companies/{id}` aparte por
+cada empresa; queda como respaldo, con caché por corrida, porque sin el nombre
+el dedupe por empresa+título no corre (ver `Job.dedupe_key`).
+
+**Dos maneras de leerla.**
+
+* **Por categoría** (`"categorias": ["programming", "machine-learning-ai"]`):
+  trae **todas** las ofertas activas de esas categorías en cada corrida, sin
+  términos y sin rotación. Es la que conviene cuando el puesto cae en una
+  categoría de Get on Board, que es todo lo que sea tecnología.
+* **Por términos** (sin `categorias`): la búsqueda de siempre, con los puestos
+  del perfil rotados por corrida. Queda para perfiles que no son de tecnología.
+
+**Por qué existe el modo por categoría (19/11/2026).** El mercado entero es
+chico: con `country_code=AR` había **101 ofertas activas en todo el portal**, 29
+en *programming* y 14 en *machine-learning-ai*. Pero Isaías lo recorría con 17
+términos de a 3 por corrida, y hasta el 18/11 la rotación era por día: dar la
+vuelta llevaba unos 6 días. Medido contra su historial:
+
+* De las 113 ofertas de Get on Board que tenía, 25 entraron **entre 4 y 7 días**
+  después de publicadas, cuando se corre tres veces por día.
+* De las 89 que se tiraron por "más de 7 días", **42 nunca se habían visto**:
+  se publicaron, estuvieron frescas y ningún término de la tanda las trajo.
+
+Leyendo las dos categorías enteras son 2 pedidos por corrida (la API devuelve
+hasta 100 por página), gratis, y no se escapa ninguna. El tope de páginas
+(`max_paginas`) está para que un perfil sin `country_code` no se baje las 300
+de programación del portal entero.
 """
 
 import json
@@ -54,6 +80,10 @@ _MODALIDAD = {"fully_remote": "remote", "remote": "remote",
 
 _ETIQUETAS = re.compile(r"<[^>]+>")
 
+#: Para que el nombre de la empresa venga adentro del aviso. Tiene que ir como
+#: arreglo JSON: `expand=company` devuelve 422 (probado el 19/11/2026).
+_EXPANDIR = '["company"]'
+
 
 def _texto(html: str) -> str:
     """El HTML del aviso como texto plano, que es lo que puntúa el modelo."""
@@ -74,6 +104,10 @@ class GetOnBoardSource(Source):
         self.results_wanted = int(config.get("results_wanted", 30))
         self.max_queries = int(config.get("max_queries", 3))
         self.timeout = int(config.get("timeout", 25))
+        #: Las categorías a leer enteras. Vacío = buscar por términos.
+        self.categorias = [str(c).strip() for c in (config.get("categorias") or [])
+                           if str(c).strip()]
+        self.max_paginas = max(1, int(config.get("max_paginas", 3) or 3))
         self._empresas: dict[int, str] = {}
 
     # --- qué buscar -----------------------------------------------------
@@ -93,6 +127,8 @@ class GetOnBoardSource(Source):
 
     def is_available(self) -> tuple[bool, str]:
         # No pide credenciales: lo único que puede faltar es qué buscar.
+        if self.categorias:
+            return True, ""
         if not self.terminos():
             return False, "el perfil no tiene keywords ni search_terms"
         return True, ""
@@ -117,12 +153,17 @@ class GetOnBoardSource(Source):
         return {}
 
     def _empresa(self, datos: dict) -> str:
-        """El nombre de la empresa, resolviendo la relación por id.
+        """El nombre de la empresa: el que vino en el listado, o pedido por id.
 
-        Se cachea por corrida: varios avisos comparten empresa, y sin el nombre
-        `Job.dedupe_key` devuelve "" y el dedupe por empresa+título no corre.
+        Con `expand=["company"]` el nombre ya viene adentro del aviso. Si no
+        vino, se pide aparte y se cachea por corrida: varios avisos comparten
+        empresa, y sin el nombre `Job.dedupe_key` devuelve "" y el dedupe por
+        empresa+título no corre.
         """
-        rel = ((datos.get("company") or {}).get("data") or {}).get("id")
+        relacion = (datos.get("company") or {}).get("data") or {}
+        if nombre := str((relacion.get("attributes") or {}).get("name") or "").strip():
+            return nombre
+        rel = relacion.get("id")
         if not rel:
             return ""
         if rel not in self._empresas:
@@ -183,7 +224,36 @@ class GetOnBoardSource(Source):
 
     # --- interfaz Source ------------------------------------------------
 
-    def fetch(self) -> list[Job]:
+    def _por_categoria(self) -> list[Job]:
+        """Todas las ofertas activas de cada categoría, página por página."""
+        pais = f" (país {self.country_code})" if self.country_code else ""
+        logger.info(f"[{self.name}] {len(self.categorias)} categoría(s) en Get on Board{pais}")
+
+        jobs: list[Job] = []
+        vistos: set[str] = set()
+        for categoria in self.categorias:
+            leidos = nuevos = 0
+            for pagina in range(1, self.max_paginas + 1):
+                cuerpo = self._get(f"categories/{categoria}/jobs",
+                                   country_code=self.country_code, per_page=100,
+                                   page=pagina, expand=_EXPANDIR)
+                crudos = cuerpo.get("data") or []
+                leidos += len(crudos)
+                for uno in crudos:
+                    job = self._a_job(uno, categoria)
+                    if job is None or job.url.lower() in vistos:
+                        continue
+                    vistos.add(job.url.lower())
+                    jobs.append(job)
+                    nuevos += 1
+                total = int((cuerpo.get("meta") or {}).get("total_pages") or 1)
+                if not crudos or pagina >= total:
+                    break
+            logger.info(f"[{self.name}]   '{categoria}': {leidos} aviso(s), {nuevos} nuevos")
+        return jobs
+
+    def _por_terminos(self) -> list[Job]:
+        """La búsqueda por los puestos del perfil, rotados por corrida."""
         terminos = self.terminos()
         logger.info(f"[{self.name}] {len(terminos)} búsqueda(s) en Get on Board"
                     f"{f' (país {self.country_code})' if self.country_code else ''}")
@@ -198,7 +268,7 @@ class GetOnBoardSource(Source):
         for termino in terminos:
             cuerpo = self._get("search/jobs", query=termino,
                                country_code=self.country_code,
-                               per_page=min(por_termino, 50))
+                               per_page=min(por_termino, 50), expand=_EXPANDIR)
             crudos = cuerpo.get("data") or []
             nuevos = 0
             for uno in crudos:
@@ -211,6 +281,10 @@ class GetOnBoardSource(Source):
                 jobs.append(job)
                 nuevos += 1
             logger.info(f"[{self.name}]   '{termino}': {len(crudos)} aviso(s), {nuevos} nuevos")
+        return jobs
+
+    def fetch(self) -> list[Job]:
+        jobs = self._por_categoria() if self.categorias else self._por_terminos()
 
         # La ventana se aplica acá y no en la consulta porque la API no tiene
         # parámetro de antigüedad. Sale gratis: la fecha ya vino en el listado,

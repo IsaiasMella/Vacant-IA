@@ -48,3 +48,13 @@ def test_le_saca_el_stderr_a_los_loggers_de_jobspy_y_se_lo_devuelve():
         assert ajeno.propagate is False
     finally:
         ajeno.handlers = []
+
+
+def test_queda_en_el_log_con_el_nombre_de_la_fuente(caplog):
+    """Indeed también lee con JobSpy (19/11/2026). Con la etiqueta fija de
+    LinkedIn, lo que fallara en Indeed se buscaba en el log en el lugar
+    equivocado."""
+    with caplog.at_level(logging.DEBUG, logger="vacantia"):
+        with _sin_stderr("indeed"):
+            print("found no jobs on page: 1", file=sys.stderr)
+    assert "[indeed] (jobspy) found no jobs on page: 1" in caplog.text

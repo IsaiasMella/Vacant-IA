@@ -1,304 +1,273 @@
-"""Fuente: Indeed Argentina.
+"""Fuente: Indeed Argentina, por la API de la app de Indeed (vía JobSpy).
 
-Va en su propio módulo y no con los otros portales porque Indeed tiene tres
-particularidades que no comparte con ninguno, y las tres se descubrieron
-probando contra el sitio real el 9/9/2026:
+**Por qué cambió (19/11/2026).** Hasta acá Indeed se leía como un portal más:
+TinyFish bajaba la página de resultados y después la de cada aviso. Cloudflare
+deja pasar el listado pero no el aviso, y la tasa de avisos legibles se fue
+cayendo: 38-50% el 9/9, y en noviembre corridas de **2 avisos de 25**. En la
+semana del 12 al 19/11 la fuente trajo 48 avisos y llegaron 3 al modelo; en
+`descartadas.jsonl` quedaron 161 avisos distintos con "Indeed no dejó leer el
+aviso". Encima cada corrida gastaba búsquedas de TinyFish.
 
-**1. Cloudflare deja pasar el listado y no el aviso.** Pegarle desde Python
-devuelve `403 Forbidden` con `server: cloudflare`; con TinyFish, la página de
-resultados sí vuelve (7,7 KB, 35 links de aviso), pero `viewjob?jk=...` vuelve
-**vacía**, 0 bytes. La página del aviso sólo se puede leer por el link de
-redirección que el propio listado trae:
+**Lo que se usa ahora.** JobSpy, el mismo paquete de la fuente `linkedin`,
+también lee Indeed, pero no por la página web: le pega a la API GraphQL que usa
+la app (`apis.indeed.com/graphql`), que no pasa por Cloudflare. Probado contra
+el sitio real el 19/11/2026, "Python", Argentina, últimos 7 días:
 
-    https://ar.indeed.com/rc/clk?jk=<id>&bb=<token>   -> 2 a 3 KB, anda
-    https://ar.indeed.com/viewjob?jk=<id>             -> 0 bytes
+    30 de 30 avisos completos en 0,8 s: título, empresa, ubicación, fecha de
+    publicación, si es remoto y la descripción entera en Markdown.
 
-**2. Ese link lleva un token de sesión (`bb`) que cambia en cada corrida.** Si
-se guardara como identidad del aviso, el mismo puesto entraría de nuevo tres
-veces por día y el dedupe no lo agarraría nunca. Por eso el `bb` se usa **sólo
-para bajar el detalle, dentro de la misma corrida**, y lo que se guarda en
-`Job.url` es la dirección canónica `viewjob?jk=<id>`, que es estable y **abre
-perfecto en el navegador de la persona** (verificado: la bloquea el scraper, no
-el browser).
+Y de paso se caen las tres limitaciones de antes:
 
-**3. El aviso no dice cuándo se publicó.** Ni el listado ni el detalle traen la
-fecha en el Markdown. La ventana la aplica el propio Indeed con `fromage`, igual
-que LinkedIn con `hours_old`: se pide sólo lo de los últimos N días y lo que
-vuelve ya viene recortado. Por eso esta fuente no filtra por antigüedad después.
+* **La fecha viene.** Antes Indeed no la decía en ningún lado y la ventana
+  dependía de `fromage`. Ahora la ventana se la pide igual al portal
+  (`hours_old`) y además se vuelve a chequear acá con la fecha del aviso.
+* **No hay techo de 16 avisos por búsqueda.** La segunda página de la web pedía
+  cuenta; la API pagina con cursor y devuelve hasta 100 por pedido.
+* **No gasta TinyFish.** No necesita ninguna credencial.
 
-**Cuánto rinde, y por qué no rinde más** (todo medido el 9/9/2026):
+**La URL es la misma de siempre**, `https://ar.indeed.com/viewjob?jk=<id>`: lo
+que ya está en `seen_jobs.json` y en el historial se sigue reconociendo como
+visto y no vuelve a entrar.
 
-* **La segunda página no existe sin cuenta**: ver `_SIN_PAGINACION`.
-* Lo que sí trae más es **buscar por más términos**, porque cada búsqueda tiene
-  su propia primera página: 1 término da 16 avisos, 6 términos dan 51 únicos.
-  Por eso acá `max_queries` rinde mucho más que en los otros portales.
-* Pero el cuello no está en el listado sino en el detalle: de los avisos que se
-  encuentran **sólo se puede leer entre el 38% y el 50%**. Y no es
-  rate-limiting: probado con lotes de 10, 5 y 3 con pausas crecientes, la tasa
-  no se mueve (33%, 38%, 38%). Los que fallan son **siempre los mismos**, en dos
-  rondas seguidas: es una propiedad del aviso, no de la request.
-* Por eso traer 30 del listado en vez de 20 no sube los útiles, sólo el gasto de
-  TinyFish, y el cupo del perfil está en 25.
+**Lo que JobSpy no deja combinar en Indeed:** la ventana de días y "sólo
+remoto" van por el mismo campo de filtros, y si está la ventana el remoto se
+ignora. Se pide la ventana, que es la que importa para no traer avisos viejos;
+la modalidad la filtra `filters.py` después, como en todas las fuentes.
 
-**El techo de esta fuente son unos 11 avisos completos por corrida.**
-
-Se evaluó y **se descartó** exprimir el listado, que trae empresa, ubicación y
-un pedazo de la descripción en Markdown: los links vienen en una lista aparte,
-sin el texto al lado, así que habría que emparejar cada bloque con su aviso por
-posición. Basta que Indeed intercale un anuncio para que los títulos y las
-empresas queden cruzados, y un aviso con la empresa equivocada es peor que un
-aviso que no está.
+**Topes.** Sigue rotando los términos por corrida con `max_queries` (ver
+`rotacion`). Es una API sin login y que no se bloquee depende de no abusar,
+igual que LinkedIn: el tope no se sube sin medir.
 """
 
 import re
-import urllib.parse
+import time
+import unicodedata
+from datetime import date, datetime, timedelta
 
+from vacantia import rotacion
+from vacantia.config import terminos_de_busqueda
 from vacantia.log import get_logger
 from vacantia.models import Job
-from vacantia.sources.portales_ar import Portal, PortalSource
+from vacantia.sources.base import Source
+from vacantia.sources.linkedin_jobs import _sin_stderr, _val
 
 logger = get_logger()
 
-#: Los valores que Indeed acepta en `fromage`. Cualquier otro lo ignora y
-#: devuelve todo, que es justo lo que no queremos: se redondea al más chico que
-#: cubra la ventana pedida, para no traer de más.
-_VENTANAS = (1, 3, 7, 14)
+#: El país, como lo nombra JobSpy (`Country` en `jobspy/model.py`). Decide el
+#: dominio (`ar.indeed.com`) y el encabezado `indeed-co` de la API.
+PAIS_POR_DEFECTO = "argentina"
 
-#: **La segunda página de resultados no existe sin cuenta.** Pedir `&start=10`
-#: devuelve 550 bytes que dicen, literal:
-#:
-#:     "Para ver más de una página de empleos, crea una cuenta o inicia sesión."
-#:
-#: No es Cloudflare ni un problema de scraping: es una decisión de producto de
-#: Indeed, y no hay parámetro que la esquive. Se probaron `start`, `sort=date`,
-#: la versión móvil y con `l=Argentina`: todas devuelven la misma primera página
-#: de 16 avisos, o el cartel de login.
-#:
-#: **Lo que sí trae más es buscar por más términos**, porque cada búsqueda tiene
-#: su propia primera página. Medido el 9/9/2026 con la misma ventana de 7 días:
-#:
-#:     1 término   -> 16 avisos
-#:     6 términos  -> 51 avisos únicos
-#:
-#: Por eso acá `max_queries` rinde mucho más que en los otros portales, y por
-#: eso `terminos()` rota los términos por día: en dos corridas se cubren seis
-#: búsquedas sin pedir seis listados cada vez.
-_SIN_PAGINACION = "crea una cuenta o inicia sesión"
+#: Cuántos avisos pedir por búsqueda. La API devuelve hasta 100 por pedido, así
+#: que hasta 100 sigue siendo una sola request: subirlo no multiplica pedidos,
+#: sólo trae más de la misma búsqueda.
+RESULTADOS_POR_DEFECTO = 50
+
+#: Pausa entre búsquedas, como en LinkedIn: sin login, que no se bloquee
+#: depende de no pedir todo de golpe.
+PAUSA_POR_DEFECTO = 2.0
 
 #: El id del aviso dentro de cualquiera de sus URLs.
 _JK = re.compile(r"[?&]v?jk=([0-9a-f]{8,20})", re.IGNORECASE)
 
-#: Lo que devuelve `title_from_url` sobre la URL canónica cuando no se pudo
-#: leer el detalle. No es un título: es el nombre del endpoint.
-_SIN_TITULO = "viewjob"
-
-#: El encabezado del detalle en Markdown:
-#:
-#:     # AI Engineer
-#:
-#:     Darwin AI
-#:
-#:     4.0 de 5 estrellas
-#:
-#:     Buenos Aires, Buenos Aires
-#:
-#: La línea de estrellas es opcional y hay que saltearla: sin eso, la empresa
-#: quedaba en "4.0 de 5 estrellas" en los avisos de empresas calificadas.
-_ESTRELLAS = re.compile(r"^[\d.,]+\s+de\s+\d+\s+estrellas", re.IGNORECASE)
+#: Cómo dice Indeed "remoto" en el lugar de la ciudad. Visto el 19/11/2026: la
+#: API marca `is_remote` en unos y en otros no, pero la ubicación dice igual
+#: "Desde casa, AR" (DonWeb, "Cloud SysAdmin", venía con `is_remote` en falso).
+_REMOTO = {"desde casa", "remoto", "remote", "teletrabajo", "home office"}
 
 
 def _canonica(url: str) -> str:
-    """`.../rc/clk?jk=abc&bb=<token>` -> `https://ar.indeed.com/viewjob?jk=abc`.
+    """`...?jk=ABC&from=serp` -> `https://ar.indeed.com/viewjob?jk=abc`.
 
-    Es la identidad del aviso: sin el token de sesión, que cambia en cada
-    corrida, y sin los parámetros de tracking del listado.
+    Es la identidad del aviso. JobSpy ya la devuelve así, pero se normaliza
+    igual: es la clave contra la que se compara todo el historial de Indeed, y
+    un parámetro de tracking colado haría que el mismo aviso entre dos veces.
     """
     m = _JK.search(url or "")
     if not m:
         return ""
-    dominio = urllib.parse.urlparse(url).netloc or "ar.indeed.com"
-    return f"https://{dominio}/viewjob?jk={m.group(1).lower()}"
+    dominio = re.match(r"https?://([^/?#]+)", url or "")
+    host = dominio.group(1).lower() if dominio else "ar.indeed.com"
+    return f"https://{host}/viewjob?jk={m.group(1).lower()}"
 
 
-def extraer_indeed(texto: str) -> dict:
-    """Título, empresa y ciudad del detalle. {} si la maquetación cambió.
+def _sin_tildes(texto: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", texto.lower())
+                   if unicodedata.category(c) != "Mn").strip()
 
-    **Hay dos maquetaciones**, y la segunda apareció probando: uno de cada
-    quince avisos viene sin el encabezado y arranca directo en
-    `## Información del empleo`, sin título ni empresa en ningún lado. De ésos
-    se saca la ubicación igual, que es la única de las tres que sí está.
+
+def ubicacion(texto: str, pais: str) -> tuple[str, str, str, bool]:
+    """'Buenos Aires, B, AR' -> ('Argentina', 'Buenos Aires', 'B', False).
+
+    Devuelve (país, ciudad, provincia, remoto). Así la arma JobSpy: ciudad,
+    código de provincia y código de país, cualquiera de los tres puede faltar.
+    Formas vistas el 19/11/2026:
+
+        "Buenos Aires, B, AR"   ciudad, provincia, país
+        "B, AR"                 sólo provincia: no hay ciudad
+        "Desde casa, AR"        remoto
+        "Córdoba, X, AR"
+
+    El código de país de dos letras se cambia por el nombre (`pais`), que es lo
+    que compara el filtro de ubicación. Un segmento de una o dos letras en el
+    medio es la provincia, no una ciudad: tomarlo como ciudad haría que el
+    filtro de ciudad compare "Bahía Blanca" contra "B".
     """
-    lineas = [l.strip() for l in (texto or "").splitlines()]
-    datos: dict[str, str] = {}
+    partes = [p.strip() for p in (texto or "").split(",") if p.strip()]
+    pais_ok = ""
+    if partes and len(partes[-1]) == 2 and partes[-1].isalpha() and partes[-1].isupper():
+        pais_ok = pais
+        partes = partes[:-1]
 
-    for i, linea in enumerate(lineas):
-        if not linea.startswith("# ") or linea.startswith("## "):
-            continue
-        datos["title"] = linea[2:].strip()
-        # Lo que sigue al título: empresa y después ubicación, salteando las
-        # líneas vacías y la calificación con estrellas.
-        siguientes = [l for l in lineas[i + 1 : i + 8]
-                      if l and not _ESTRELLAS.match(l) and not l.startswith("#")]
-        if siguientes:
-            datos["company"] = siguientes[0]
-        if len(siguientes) > 1:
-            # "Buenos Aires, Buenos Aires" -> la ciudad es lo de antes de la coma.
-            datos["city"] = siguientes[1].split(",")[0].strip()
-        break
+    remoto = bool(partes) and _sin_tildes(partes[0]) in _REMOTO
+    if remoto:
+        partes = partes[1:]
 
-    if not datos.get("city"):
-        for i, linea in enumerate(lineas):
-            if linea.lower().startswith("## ubicación"):
-                if valor := next((l for l in lineas[i + 1 : i + 5] if l), ""):
-                    datos["city"] = valor.split(",")[0].strip()
-                break
-    return datos
+    ciudad = provincia = ""
+    if len(partes) >= 2:
+        ciudad, provincia = partes[0], ", ".join(partes[1:])
+    elif len(partes) == 1:
+        if len(partes[0]) <= 2:
+            provincia = partes[0]
+        else:
+            ciudad = partes[0]
+    return pais_ok, ciudad, provincia, remoto
 
 
-class IndeedSource(PortalSource):
-    """Indeed AR. Reusa la maquinaria de los portales; cambia lo de arriba."""
-
+class IndeedSource(Source):
     name = "indeed"
-    portal = Portal(
-        name="indeed",
-        etiqueta="Indeed",
-        # `q` va urlencodeado y no en slug: Indeed busca por texto, no por ruta.
-        search_url="https://ar.indeed.com/jobs?q={query}",
-        location_url="https://ar.indeed.com/jobs?q={query}&l={location}",
-        job_url_pattern=r"indeed\.com/(?:rc/clk|viewjob)\?.*?jk=",
-    )
-    extractor = staticmethod(extraer_indeed)
 
     def __init__(self, config: dict, profile: dict):
         super().__init__(config, profile)
-        #: {url canónica: link con token} de esta corrida. El token vale para
-        #: bajar el detalle ahora y no se guarda en ningún lado.
-        self._con_token: dict[str, str] = {}
-        #: Por fecha y no por "relevancia", que es el default de Indeed. Como
-        #: sólo se puede leer la primera página, lo que entre en esa página es
-        #: todo lo que vamos a ver: conviene que sea lo más nuevo. Y el mismo
-        #: aviso rinde más cuanto antes se lo ve, porque tiene menos postulantes.
-        self.orden = str(config.get("sort", "date") or "")
+        self.pais = str(config.get("country") or PAIS_POR_DEFECTO).strip().lower()
+        #: "" = todo el país. Con una ciudad, la API busca en un radio alrededor.
+        self.location = str(config.get("location") or "").strip()
+        self.results_wanted = int(config.get("results_wanted") or RESULTADOS_POR_DEFECTO)
+        self.max_queries = int(config.get("max_queries", 4) or 4)
+        self.delay = float(config.get("delay_between_searches", PAUSA_POR_DEFECTO))
+        self.proxies = config.get("proxies") or None
 
-    def _fromage(self) -> int | None:
-        """La ventana de días, redondeada a lo que Indeed acepta."""
-        if self.max_age_days <= 0:
+    # --- qué buscar -----------------------------------------------------
+
+    def terminos(self) -> list[str]:
+        """Los términos de esta corrida, rotados como en las otras fuentes."""
+        crudos = terminos_de_busqueda(self.profile, self.config.get("search_terms"))
+        terminos = [str(t).strip() for t in crudos if str(t).strip()]
+        tanda, self.siguiente_en_rotacion = rotacion.elegir(
+            self.profile, self.name, terminos, self.max_queries)
+        return tanda
+
+    def is_available(self) -> tuple[bool, str]:
+        try:
+            import jobspy  # noqa: F401
+        except ImportError:
+            return False, "falta el paquete 'python-jobspy' (ver README: necesita --no-deps)"
+        if not self.terminos():
+            return False, "el perfil no tiene keywords ni search_terms"
+        return True, ""
+
+    # --- red ------------------------------------------------------------
+
+    def _scrape(self, termino: str):
+        """Una búsqueda. Es el único punto que sale a la red."""
+        from jobspy import scrape_jobs
+
+        kwargs = {
+            "site_name": ["indeed"],
+            "search_term": termino,
+            "country_indeed": self.pais,
+            "results_wanted": self.results_wanted,
+            "description_format": "markdown",
+            "verbose": 0,
+        }
+        if self.location:
+            kwargs["location"] = self.location
+        if self.max_age_days > 0:
+            kwargs["hours_old"] = self.max_age_days * 24
+        if self.proxies:
+            kwargs["proxies"] = self.proxies
+        with _sin_stderr("indeed"):
+            return scrape_jobs(**kwargs)
+
+    # --- armado ---------------------------------------------------------
+
+    def _a_job(self, fila, termino: str) -> Job | None:
+        url = _canonica(_val(fila, "job_url"))
+        titulo = _val(fila, "title")
+        if not url or not titulo:
             return None
-        return next((v for v in _VENTANAS if v >= self.max_age_days), _VENTANAS[-1])
 
-    def url_de_busqueda(self, termino: str) -> str:
-        """Como la de los portales, pero con el término urlencodeado y `fromage`.
+        lugar = _val(fila, "location")
+        pais, ciudad, provincia, remoto = ubicacion(lugar, self.pais.title())
+        # Como en LinkedIn: que Indeed no lo marque como remoto NO quiere decir
+        # que sea presencial, así que en ese caso queda vacío y no filtra.
+        marcado = _val(fila, "is_remote").lower() in ("true", "1", "yes")
+        modo = "remote" if (remoto or marcado) else ""
 
-        `PortalSource` arma la URL con `slug()` porque Bumeran y compañía ponen
-        la búsqueda en la ruta. Acá va en el query string.
+        descripcion = _val(fila, "description")
+        return Job(
+            url=url,
+            title=titulo,
+            company=_val(fila, "company"),
+            source=self.name,
+            location=lugar,
+            description=descripcion[:3000],
+            descripcion_completa=descripcion,
+            posted_at=_val(fila, "date_posted")[:10],
+            country=pais,
+            city=ciudad,
+            region=provincia,
+            work_mode=modo,
+            raw={"portal": "Indeed", "busqueda": termino,
+                 "job_url_direct": _val(fila, "job_url_direct")},
+        )
+
+    def _es_reciente(self, job: Job) -> bool:
+        """La API ya aplica la ventana; esto es la red de seguridad.
+
+        Sin fecha entra: no hay con qué decir que es viejo.
         """
-        query = urllib.parse.quote_plus(str(termino).strip())
-        if self.location and self.location_url:
-            url = self.location_url.format(
-                query=query, location=urllib.parse.quote_plus(self.location))
-        else:
-            url = self.search_url.format(query=query, location="")
-        if (dias := self._fromage()) is not None:
-            url += f"&fromage={dias}"
-        if self.orden:
-            url += f"&sort={self.orden}"
-        return url
+        if self.max_age_days <= 0 or not job.posted_at:
+            return True
+        try:
+            publicado = datetime.fromisoformat(job.posted_at).date()
+        except ValueError:
+            return True
+        return publicado >= date.today() - timedelta(days=self.max_age_days)
 
-    def links_de_aviso(self, links: list[str], texto: str) -> list[str]:
-        """Los avisos del listado, ya canónicos.
-
-        No se puede usar el de `PortalSource`: ése corta el query string, y en
-        Indeed el `jk` que va ahí **es** la identidad del aviso. Cortarlo dejaba
-        todos los links en `https://ar.indeed.com/rc/clk`, o sea uno solo.
-        """
-        # Si algún día se intenta paginar de nuevo, que quede dicho en el log
-        # por qué no vino nada, en vez de parecer que el portal se rompió.
-        if _SIN_PAGINACION in (texto or "").lower():
-            logger.info(f"[{self.name}] Indeed pide cuenta para pasar de la primera "
-                        "página: se lee sólo la primera, por búsqueda")
-
-        candidatos = list(links) + re.findall(r"https?://[^\s)\"'<>]+", texto or "")
-        salida: list[str] = []
-        for link in candidatos:
-            if not self.job_re.search(link):
-                continue
-            canonica = _canonica(link)
-            if not canonica or canonica in self._con_token:
-                continue
-            # El link con token sólo si lo trae; el listado a veces da la
-            # canónica pelada, y ésa no se puede bajar.
-            self._con_token[canonica] = link if "bb=" in link else ""
-            salida.append(canonica)
-        return salida
-
-    def _detalle(self, jobs: list[Job]) -> None:
-        """Baja el detalle por el link con token, y lo aplica al job canónico.
-
-        `PortalSource._detalle` pide `job.url` directamente; acá eso devolvería
-        0 bytes siempre.
-
-        **Se reintenta lo que no volvió.** Medido contra el sitio real: de 10
-        links pedidos en un lote, TinyFish devuelve 7, y de esos 7 ninguno viene
-        vacío. O sea que lo que falta no es Cloudflare bloqueando, es el lote que
-        vuelve incompleto; pidiéndolo de nuevo aparece.
-        """
-        pedibles = {j.url: self._con_token.get(j.url, "") for j in jobs}
-        urls = [u for u in pedibles.values() if u]
-        if not urls:
-            logger.warning(f"[{self.name}] Ningún aviso trajo el link con token: "
-                           "me quedo con lo del listado")
-            return
-
-        paginas = self._descargar(urls, con_links=False)
-        # Un reintento, y uno solo. Medido dos veces: la primera ronda recupera
-        # algunos, la segunda no recupera ninguno. Las que faltan después del
-        # reintento son siempre las mismas, así que no es que el lote vuelva
-        # incompleto: es Cloudflare que a esos avisos no los deja leer, y
-        # pedirlos de nuevo sólo agrega segundos a la corrida.
-        if faltan := [u for u in urls if not paginas.get(u, ("", []))[0]]:
-            logger.info(f"[{self.name}] {len(faltan)} aviso(s) no volvieron: reintento")
-            paginas.update(self._descargar(faltan, con_links=False))
-
-        for job in jobs:
-            texto, _ = paginas.get(pedibles.get(job.url, ""), ("", []))
-            if not texto:
-                continue
-            job.description = texto[:3000]
-            try:
-                datos = extraer_indeed(texto)
-            except Exception as e:      # un cambio de maquetación no tumba nada
-                logger.debug(f"[{self.name}] No pude leer {job.url}: {e}")
-                continue
-            if titulo := datos.pop("title", ""):
-                job.title = titulo
-            for campo, valor in datos.items():
-                if valor and not getattr(job, campo, ""):
-                    setattr(job, campo, valor)
+    # --- interfaz Source ------------------------------------------------
 
     def fetch(self) -> list[Job]:
-        self._con_token.clear()
-        jobs = super().fetch()
+        terminos = self.terminos()
+        logger.info(f"[{self.name}] {len(terminos)} búsqueda(s) en Indeed "
+                    f"({self.pais}, últimos {self.max_age_days or '∞'} días, "
+                    f"hasta {self.results_wanted} por búsqueda)")
 
-        # Los que se quedaron sin título de verdad no entran. Sin la página del
-        # aviso lo único que hay es la URL canónica, y el título sale del slug:
-        # queda en "viewjob", sin empresa y sin descripción. Eso no se puede ni
-        # mostrar en una tarjeta, el modelo le pone 0 igual que a una oferta que
-        # de verdad no sirve, y encima cuesta una llamada.
-        #
-        # Con el detalle apagado a mano no se filtra nada: ahí que no haya
-        # título es lo esperado, no una falla.
-        if not self.fetch_description:
-            return jobs
-        sirven = [j for j in jobs if j.description and j.title != _SIN_TITULO]
-        for j in jobs:
-            if j not in sirven:
-                self.descartar(j.url, j.title, "sin detalle: Indeed no dejó leer el aviso")
-        if perdidos := len(jobs) - len(sirven):
-            logger.info(f"[{self.name}] {perdidos} aviso(s) sin detalle, afuera: "
-                        "sin la página del aviso no hay ni título ni empresa")
+        jobs: list[Job] = []
+        vistos: set[str] = set()
+        for i, termino in enumerate(terminos):
+            if i:
+                time.sleep(self.delay)
+            try:
+                tabla = self._scrape(termino)
+            except Exception as e:
+                # Un cambio en la API o un corte: se pierde esta búsqueda, no la
+                # corrida.
+                logger.error(f"[{self.name}]   falló '{termino}': {e}")
+                continue
 
-        # `PortalSource.fetch` filtra por antigüedad al final, y acá eso no tira
-        # nada: Indeed no dice la fecha en ningún lado, y sin fecha `es_reciente`
-        # deja pasar. La ventana ya la aplicó `fromage` del lado del portal.
-        logger.info(f"[{self.name}] {len(sirven)} aviso(s) con detalle")
-        return sirven
+            nuevos = 0
+            for _, fila in tabla.iterrows():
+                job = self._a_job(fila, termino)
+                if job is None or job.url in vistos:
+                    continue
+                vistos.add(job.url)
+                if not self._es_reciente(job):
+                    self.descartar(job.url, job.title, f"publicado hace más de "
+                                   f"{self.max_age_days} días", job.company)
+                    continue
+                jobs.append(job)
+                nuevos += 1
+            logger.info(f"[{self.name}]   '{termino}': {len(tabla)} aviso(s), {nuevos} nuevos")
+
+        logger.info(f"[{self.name}] {len(jobs)} aviso(s) en total")
+        return jobs

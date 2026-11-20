@@ -17,7 +17,7 @@ from vacantia.filters import (
     english_pain_lines,
 )
 from vacantia.log import get_logger
-from vacantia.models import Job
+from vacantia.models import Job, clave_de_url
 from vacantia.notifiers import build_notifiers
 from vacantia.notifiers.base import Notifier
 from vacantia.notifiers.console import ConsoleNotifier
@@ -112,10 +112,21 @@ def collect(sources: list[Source], result: RunResult) -> list[Job]:
 
 
 def _embudo_de_fuentes(embudo: Embudo, sources: list[Source], jobs: list[Job],
-                       result: RunResult) -> None:
-    """Lo que trajo cada fuente y lo que tiró ella misma antes de devolverlo."""
+                       result: RunResult, ya_vistas: set[str] | None = None) -> None:
+    """Lo que trajo cada fuente y lo que tiró ella misma antes de devolverlo.
+
+    **Lo que ya se vio en otra corrida no se anota.** Get on Board deja una
+    oferta activa durante semanas, y cuando pasa los 7 días la fuente la tira
+    por vieja en cada corrida. Medido el 19/11/2026: de 89 descartadas así, 47
+    se habían visto frescas y puntuado en su momento. Contarlas otra vez inflaba
+    "descartada en la fuente" y hacía parecer que se perdían ofertas que no se
+    perdieron. `ya_vistas` son las claves de `seen_jobs.json` (`Job.key`).
+    """
+    ya_vistas = ya_vistas or set()
     for source in sources:
         for d in getattr(source, "descartes", []):
+            if clave_de_url(d["url"]) in ya_vistas:
+                continue
             embudo.descartar(source.name, "descartada_en_fuente", d["motivo"],
                              d["url"], d.get("titulo", ""), d.get("empresa", ""))
     embudo.contar_jobs("trajo", jobs)
@@ -179,7 +190,7 @@ def run(profile: dict, dry_run: bool = False) -> RunResult:
     jobs = collect(sources, result)
     result.fetched = len(jobs)
     logger.info(f"Total recolectado: {len(jobs)} oferta(s)")
-    _embudo_de_fuentes(embudo, sources, jobs, result)
+    _embudo_de_fuentes(embudo, sources, jobs, result, state.seen_keys)
 
     # 2) quitar duplicados
     new_jobs = state.filter_new(jobs)

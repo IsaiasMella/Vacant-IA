@@ -76,10 +76,10 @@ FUENTES = (
      "Misma base de avisos que Bumeran: prendé uno de los dos, o vas a recibir "
      "todo duplicado."),
     ("computrabajo", "Computrabajo", ""),
-    ("indeed", "Indeed", "Los avisos que no dicen la fecha entran igual: la "
-                         "antigüedad se la pide el propio Indeed."),
+    ("indeed", "Indeed", "No necesita ninguna clave: lee Indeed por la misma "
+                         "vía que la app del celular."),
     ("getonbrd", "Get on Board",
-     "La única que no necesita ninguna clave: sigue trayendo aunque falten las "
+     "No necesita ninguna clave: sigue trayendo aunque falten las "
      "credenciales. Es sobre todo chilena, así que se le piden los avisos que "
      "aplican a la Argentina, que casi siempre son remotos."),
 )

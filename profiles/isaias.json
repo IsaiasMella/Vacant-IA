@@ -169,13 +169,16 @@
         "GenAI Engineer",
         "Software Engineer Python"
       ],
-      "results_wanted": 25,
-      "max_queries": 4,
-      "sort": "date"
+      "results_wanted": 50,
+      "max_queries": 4
     },
     {
       "type": "getonbrd",
       "enabled": true,
+      "categorias": [
+        "programming",
+        "machine-learning-ai"
+      ],
       "search_terms": [
         "AI Engineer",
         "Python",

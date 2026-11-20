@@ -133,8 +133,11 @@ def _busquedas_y_siguiente(profile: dict, config: dict) -> tuple[list[tuple[str,
 
 
 @contextlib.contextmanager
-def _sin_stderr():
+def _sin_stderr(fuente: str = "linkedin"):
     """Nada de lo que pase acá adentro sale por stderr; va a `vacantia.log`.
+
+    `fuente` es la etiqueta con la que queda en el log: lo usan `linkedin` e
+    `indeed`, que leen las dos con JobSpy.
 
     JobSpy le engancha un `StreamHandler(stderr)` a cada logger suyo y por ahí
     manda hasta los mensajes de éxito ("finished scraping", nivel INFO).
@@ -173,7 +176,7 @@ def _sin_stderr():
             ajeno.handlers, ajeno.propagate = handlers, propagate
         for linea in capturado.getvalue().splitlines():
             if linea.strip():
-                logger.debug(f"[linkedin] (jobspy) {linea.strip()}")
+                logger.debug(f"[{fuente}] (jobspy) {linea.strip()}")
 
 
 class LinkedInJobsSource(Source):
