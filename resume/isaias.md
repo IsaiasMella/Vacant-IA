@@ -1,7 +1,9 @@
 # Isaías Mella — CV
 
+**AI Engineer | Full Stack** — Bahía Blanca, Argentina (GMT-3)
+
 ## Perfil
-Desarrollador Full Stack con +6 años de experiencia construyendo soluciones para sectores exigentes como el gubernamental (Aduana Argentina), fintech e inmobiliario. Llevé proyectos desde cero hasta producción y lideré equipos en el camino. Me motiva resolver problemas complejos y trabajar en entornos con desafíos constantes, donde pueda seguir creciendo y aportar valor real.
+AI Engineer y Full Stack con +6 años de experiencia. Construyo soluciones con LLMs, RAG y agentes integradas en productos en producción, en sectores exigentes como el gubernamental (Aduana Argentina), fintech e inmobiliario. Llevé proyectos desde cero hasta producción y lideré equipos en el camino.
 
 ## Experiencia
 
@@ -11,15 +13,18 @@ Desarrollador Full Stack con +6 años de experiencia construyendo soluciones par
 - Extendí y mantuve el modelado de datos con SQLAlchemy (PostgreSQL), gestionando migraciones con Alembic.
 - Construí un sistema de roles, permisos y delegaciones multi-organización.
 - Reduje en un 30% los tiempos de carga en los formularios del módulo de importaciones.
-- **Chatbot Regulatorio de Importaciones con IA:** Construí un sistema RAG sobre documentación regulatoria de importaciones y restricciones aduaneras (LangChain + Chroma), integrado vía chat embebido, permitiendo a despachantes consultar normativa sin salir de la plataforma.
+- **Chatbot Regulatorio de Importaciones con IA:**
+  - Construí un chatbot RAG (LangChain + Chroma) sobre normativa de importación/exportación y restricciones aduaneras, con tool calling para decidir entre consultar documentos o base de datos.
+  - Lo integré como chat embebido para que los despachantes consulten normativa sin salir de la plataforma.
+  - Implementé la estimación de costo por consulta según el consumo de tokens.
 - **Stack:** JavaScript, TypeScript, Python, FastAPI, React.js, Next.js, SQLAlchemy, Alembic, PostgreSQL, RAG, LangChain, Chroma.
 
 ### Tech Lead — Desky (oct. 2023 - ene. 2026)
+- Integré Whisper y LLMs de OpenAI para transcribir llamadas y generar resúmenes y puntos clave automáticos.
 - Lideré la transición del equipo durante un cambio de modelo de negocio.
 - Gestioné y mentoricé a un desarrollador junior.
-- Integré APIs de OpenAI (LLMs) para transcribir llamadas y generar resúmenes y puntos clave de forma automática.
-- Recompuse el proyecto desde cero, mejorando la escalabilidad y eficiencia del código.
-- **Stack:** JavaScript, TypeScript, Python, FastAPI, Next.js, React Native, React.js, Redux, Jest, OpenAI API, LLMs.
+- Reconstruí el proyecto desde cero, mejorando la escalabilidad y eficiencia del código.
+- **Stack:** JavaScript, TypeScript, Python, FastAPI, Next.js, React Native, React.js, Redux, Jest, OpenAI API, Whisper, LLMs.
 
 ### Full Stack Developer — ASAP Consulting S.A. (abr. 2023 - oct. 2023)
 - **Cliente:** Fivvy (Fintech)
@@ -41,7 +46,7 @@ Desarrollador Full Stack con +6 años de experiencia construyendo soluciones par
 - **Lenguajes:** JavaScript, TypeScript, Python, SQL
 - **Backend & Frameworks:** FastAPI, Node.js, Express, SQLAlchemy, Alembic, Clean Architecture
 - **Frontend & Mobile:** React.js, Next.js, React Native, Redux
-- **IA & Datos:** OpenAI API, LLMs, RAG, LangChain, Chroma, PostgreSQL, SQL Server
+- **IA & Datos:** OpenAI API, Whisper, LLMs, RAG, LangChain, Chroma, tool calling, PostgreSQL, SQL Server
 - **Testing:** Jest, Pytest
 
 ## Formación

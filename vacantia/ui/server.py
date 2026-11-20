@@ -363,17 +363,24 @@ class Handler(BaseHTTPRequestHandler):
         from vacantia.ui import linkedin_urls
 
         tab = linkedin_urls.tipo_de((params.get("tab") or ["publicaciones"])[0])
+        datos_perfil = data.leer_perfil(perfil)
         if tab == "jobs":
             elegido, url = self._armar_jobs(params)
+            # Al entrar (todavía sin nada elegido), "Que además diga" viene con
+            # las habilidades del perfil: es para lo que están. Una vez que la
+            # persona armó, manda lo que dejó ella, aunque lo haya vaciado.
+            if not params.get("puesto") and not params.get("tambien"):
+                elegido["tambien"] = linkedin_urls.habilidades_de(datos_perfil)
         else:
             elegido, url = self._armar_publicaciones(params)
 
         cuerpo = render.linkedin(
             perfil, tab, _mensajes(params), elegido=elegido, url=url,
             guardados=linkedin_urls.favoritos(perfil, tab),
-            # Los puestos salen de las palabras clave del perfil: un solo lugar
+            # Los puestos salen de "Puestos a buscar" del perfil: un solo lugar
             # donde se agregan y se sacan, y no dos que se desincronizan.
-            puestos=linkedin_urls.puestos_de(data.leer_perfil(perfil)),
+            puestos=linkedin_urls.puestos_de(datos_perfil),
+            sugeridas=linkedin_urls.sugeridas(datos_perfil, tab),
             apliques={"pendientes": linkedin_urls.pendientes(perfil, tab),
                       "confirmadas": len(linkedin_urls.postulaciones(perfil, tab))})
         self._pagina("LinkedIn URLs", cuerpo, perfil, "linkedin")

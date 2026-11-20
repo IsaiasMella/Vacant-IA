@@ -1,10 +1,10 @@
 # Notas para Isaías
 
-**676 tests pasan.**
+**733 tests pasan.**
 
 ```
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.venv\Scripts\python.exe -m pytest tests -q      →  676 passed
+.venv\Scripts\python.exe -m pytest tests -q      →  733 passed
 ```
 
 Andando todo: los 3 portales argentinos, Indeed, Get on Board, LinkedIn Jobs,
@@ -22,7 +22,7 @@ historial de git, en el commit `fe29188`; 2.40 y 2.41 no llegaron a esa versión
 
 | # | Qué | Dónde |
 |---|---|---|
-| 1 | **Cargar tu CV de Full Stack**, con sus palabras de búsqueda. Hasta entonces 2.29 no se nota | Mi perfil → Mis CV |
+| 1 | **Cargar tu CV de Full Stack**, con sus puestos y habilidades. Hasta entonces 2.29 no se nota | Mi perfil → Mis CV |
 | 2 | **Decidir qué hacés con el inglés.** Hay unas 90 ofertas ya puntuadas esperando detrás de esa casilla (2.28) | Mi perfil |
 | 3 | **Usarlo una semana** y anotar qué falla antes de pasárselo a nadie | — |
 | 4 | **4 ofertas viejas sin los juicios de 2.41** (3 de `google_posts`, 1 de .NET). Marcarlas a mano o re-puntuarlas (4 llamadas) | Trabajos |
@@ -200,7 +200,8 @@ que no tienen fecha ni las que ya marcaste.
 
 La app arma la dirección y vos la abrís. Es la única forma de llegar a los
 posteos del día, porque Google los indexa uno a tres días tarde. Los puestos
-tildables son tus palabras clave, las mismas que usa el buscador automático.
+tildables son tus *Puestos a buscar*, los mismos que usa el buscador automático
+(las habilidades no, 2.48). Arriba de las guardadas están las sugeridas (2.48).
 
 Lo probado contra LinkedIn, que es el mapa si algún día deja de andar:
 
@@ -280,8 +281,8 @@ igual sin ofertas.
 
 ## 2.29. Más de un CV
 
-Cada CV tiene sus palabras de búsqueda, que se suman en todas las fuentes. La
-oferta se puntúa contra el CV que mejor encaja y la tarjeta dice cuál mandar.
+Cada CV tiene sus puestos, que se suman en todas las fuentes, y sus habilidades,
+que no se buscan (2.48). La oferta se puntúa contra el CV que mejor encaja y la tarjeta dice cuál mandar.
 Decisiones que no conviene deshacer:
 
 - **Con un solo CV, el prompt sale byte a byte igual.** Hay un test.
@@ -465,6 +466,82 @@ historial (153 corridas, del 7/9 al 16/10). Salieron tres cosas:
   extrae. Antes se miraba sólo el de la fuente, y un post que el modelo tituló
   "TECH LEAD | SENIOR FULL STACK e AI ENGINEER" llegó a puntuarse con "Lead" en
   la lista.
+
+## 2.47. La pantalla sólo muestra de 50 para arriba
+
+- **El pedido:** "menores a 50 no quiero ver nada". En `isaias` eran 1044 de las
+  1179 sin marcar, y tapaban las 135 que servían.
+- **Ahora:** `PUNTAJE_PARA_MOSTRAR = 50` en `ui/data.py`. Se corta en
+  `_por_estado` y en `contar_ofertas`, así la lista y los números dicen lo mismo,
+  en todas las pestañas **menos Apliqué** (hay 3 aplicadas debajo de 50, y para
+  el seguimiento tienen que seguir ahí).
+- **No se borra nada:** el historial queda igual, para el dedupe y los gráficos.
+  Sin puntaje se muestra, porque no se sabe si está debajo.
+- **Tests:** cuatro que usaban ofertas de 0, 10 o 45 para probar el orden pasaron
+  a puntajes de 50 para arriba, sin cambiar lo que protegen. Uno nuevo:
+  `test_menos_de_50_no_se_ve_salvo_en_aplique`.
+
+## 2.48. Búsquedas que no se repiten, puestos aparte de habilidades e inglés antes del modelo
+
+Salió de la investigación del 19/11/2026 (unas 1.000 ofertas de LinkedIn de los
+últimos 30 días). Seis cambios:
+
+- **A. La rotación es por corrida, no por día.** Las tres corridas del día
+  (12:00, 16:30, 23:59) hacían las mismas búsquedas: el 18/11, dos seguidas de
+  LinkedIn trajeron unas 50 ofertas cada una y 31 ya estaban vistas. Ahora cada
+  fuente sigue desde donde quedó, con la posición en
+  `state/<perfil>/rotacion.json` (`vacantia/rotacion.py`). La guarda el motor
+  al final, así que un `--dry-run` o una corrida que se cae no la mueven.
+  **No se subió** `max_searches` de LinkedIn: sigue en 3.
+- **C. Puestos y habilidades, separados.** En Mi perfil hay *Puestos a buscar* y
+  *Habilidades*, en el perfil y en cada CV. Los puestos se buscan. Las habilidades
+  van al modelo (`- Skills:` en el prompt), al triaje y a "Que además diga" de
+  Jobs, que al entrar viene con ellas. Los campos conservan su nombre en el JSON
+  (`keywords` y `palabras_clave` son los puestos; `habilidades` es nuevo), así que
+  las copias de la familia siguen andando. "Full Stack" y "Full-stack" cuentan
+  como una búsqueda. **Migración:** en tu perfil, Python, FastAPI, React y Next.js
+  pasaron a habilidades, arriba y en el CV Full Stack. Los 14 puestos de tu CV
+  principal no se tocaron. `juan_carlos` no tenía nada para mover.
+  **CV nuevo (19/11):** `resume/isaias.md` y `resume/isaias-cv-2.md` se rearmaron
+  desde "Isaias Mella - CV - Full Stack.pdf" (eran iguales entre sí y lo siguen
+  siendo). Las habilidades salen de su stack: las comunes arriba (Python, FastAPI,
+  TypeScript, PostgreSQL...), las de IA en el CV principal (LLM, RAG, LangChain,
+  Whisper, tool calling...) y las de front en el Full Stack (React, Next.js, React
+  Native...): 25 en total. Al modelo y al triaje les llegan todas; "Que además
+  diga" precarga sólo las primeras 6 (`MAX_HABILIDADES_PRECARGADAS`), porque un OR
+  de 25 tecnologías ya no filtra. El inglés B1 del PDF no se pasó al `.md`, igual
+  que antes: el perfil dice que no querés puestos con inglés.
+- **G. Inglés antes del modelo.** El 19/11, 9 de 11 ofertas de LinkedIn se
+  cayeron por idioma *después* de pagar la puntuación. Ahora, con el inglés
+  desactivado, `filters.pide_ingles_sin_puntuar` descarta antes lo que pide
+  inglés por escrito o está escrito en inglés. Lee el **texto entero**: las
+  fuentes cortan en 3.000 caracteres, y por eso se te pasó una que lo pedía al
+  final. El texto entero vive en `Job.descripcion_completa`, que **no** se guarda
+  en el historial. Contra tu historial, coincidió con el modelo en 729 de 755
+  avisos en inglés, le erró a 1 de unos 850 en castellano (un "Cloud Platform
+  Engineer Lead", que igual sale por "Lead") y no habría tirado ninguna de las
+  que aplicaste. El modelo sigue como segunda capa. En el embudo estas
+  descartadas cuentan como "antes del LLM" y no como "idioma".
+- **H. Get on Board** ya no busca "Machine Learning" ni "Data", que estaban en
+  tus puestos excluidos: tiraba 15 avisos por corrida.
+- **D. Sugeridas en LinkedIn URLs.** Hasta 5 por pestaña, armadas con tus
+  puestos, con *Abrir* y *Guardar*. En Publicaciones van los títulos en
+  castellano primero y "Forward Deployed" acortado, todas de 110 letras para
+  abajo y con un NOT por término. En Jobs van las últimas 2 horas, remotos y con
+  menos de 10 candidatos, sin repetir los títulos en castellano. El tope de 110
+  en Jobs no se midió: se usa por precaución.
+- **F. `google_posts` apagado en tu perfil** (779 ofertas, 0 postulaciones). El
+  interruptor ya existía: es el tilde en Configuración. En 125 corridas desde el
+  16/10, google_posts puso 2,7 ofertas por corrida en el modelo. Con lotes de 6
+  eso son **0,43 llamadas menos por corrida en promedio, hasta 2**: 54 de las
+  189 que se hicieron, un 29%. Se ahorran además las 4 búsquedas de TinyFish
+  por corrida.
+
+**Pendiente:** los `search_terms` propios de las fuentes siguen sumando términos
+redundantes según la investigación: LinkedIn "GenAI Engineer" y "AI Agent
+Engineer", Indeed "GenAI Engineer" y "Software Engineer Python", Get on Board
+"Python" y "LLM". Ocupan lugares de la rotación. No los toqué porque no estaban
+en el pedido.
 
 ## 2.42. Jev: probado y descartado por ahora
 

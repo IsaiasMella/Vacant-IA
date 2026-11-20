@@ -193,8 +193,14 @@ Lo demás está escondido a propósito: con seis controles a la vista por oferta
 cada tarjeta era una decisión de seis opciones en vez de una.
 
 La lista va **ordenada por puntaje**, de la que mejor encaja a la que menos, y
-**de a 20 por página**. El puntaje 0 lo sacan las que directamente no son para
-vos, así que terminan al final.
+**de a 20 por página**.
+
+**Sólo se ven las de 50 para arriba.** Las que puntúan menos no aparecen en
+ninguna pestaña ni en los números de arriba, salvo en *Apliqué*: si le mandaste
+el CV a una de 40, la encontrás igual. No se borran: siguen guardadas para no
+volver a puntuarlas y cuentan en los gráficos de Métricas. El corte está en
+`PUNTAJE_PARA_MOSTRAR` (`vacantia/ui/data.py`). Es otro número que el
+`min_score`, que decide de cuánto para arriba te avisa por Telegram.
 
 Arriba hay dos filtros que se combinan:
 
@@ -281,13 +287,31 @@ un toque. La idea es tener cuatro o cinco y revisarlas dos veces por día: los
 posteos buenos duran horas. La misma dirección no se guarda dos veces: si ya la
 tenías, te dice con qué nombre.
 
-Los puestos tildables **son tus palabras clave de Mi perfil**, no una lista
-aparte: lo que agregues o saques allá aparece o desaparece acá. Ojo con el otro
-efecto, que las mismas palabras son las que el buscador usa contra los portales.
+Los puestos tildables **son tus *Puestos a buscar* de Mi perfil** (los del
+perfil y los de cada CV), no una lista aparte: lo que agregues o saques allá
+aparece o desaparece acá. Ojo con el otro efecto, que los mismos puestos son los
+que el buscador usa contra los portales. Tus **Habilidades** no aparecen como
+puestos: `Python AND buscamos` trae cualquier posteo que nombre Python.
+
+Arriba de tus guardadas está **Sugeridas para vos**: búsquedas ya armadas con
+tus puestos, cada una con *Abrir* y *Guardar*. Al guardarla pasa a tus guardadas
+y deja de aparecer como sugerida.
+
+- **En Publicaciones** son posteos de las últimas 24 horas que dicen "buscamos" o
+  "estamos buscando", con tus puestos en grupos de dos o tres para no pasar de
+  110 letras. **Los puestos en castellano van primero**: el buscador de posteos
+  busca la frase exacta, y ahí "Ingeniero de IA" sí trae posteos en castellano.
+  "Forward Deployed Engineer" se busca como "Forward Deployed", para que
+  encuentre también "Forward Deployed AI Engineer".
+- **En Jobs** son avisos de las últimas 2 horas, remotos y con menos de 10
+  candidatos. Ahí no van los puestos en castellano: Empleos busca por
+  significado, y "Desarrollador IA" trae los mismos avisos en inglés que "AI
+  Engineer". Lo midió la investigación del 19/11/2026 sobre unas 1.000 ofertas.
 
 La pestaña **Jobs** es la misma pantalla para los avisos de Empleos. El buscador
 automático también los trae, pero tarde y sin los filtros que más rinden. Tildás
-los puestos, qué más tiene que decir el aviso (tu stack), dónde, modalidad,
+los puestos, qué más tiene que decir el aviso (al entrar viene con las
+primeras 6 de tus **Habilidades** de Mi perfil; borralo y no filtra), dónde, modalidad,
 nivel, qué dejar afuera y de cuándo (desde la última hora), y dos atajos de poca
 competencia: **menos de 10 candidatos** y **solicitud sencilla**. Lo que no se
 entiende con leer el rótulo tiene el signo de pregunta. Tiene sus propios
@@ -381,8 +405,8 @@ Ahí no hay ningún botón, a propósito: Métricas es una pantalla de lectura.
 
 ### Mi perfil
 
-Lo que cambia mientras buscás, sin tocar ningún archivo: tus CV, las palabras
-clave, los puestos que no querés, las tecnologías que no usás, dónde y en qué idioma, las empresas y los
+Lo que cambia mientras buscás, sin tocar ningún archivo: tus CV, los puestos a
+buscar y tus habilidades, los puestos que no querés, las tecnologías que no usás, dónde y en qué idioma, las empresas y los
 reclutadores que seguís, y tus datos personales.
 
 Lo que se explica una sola vez está en el **signo de pregunta** al lado del
@@ -393,10 +417,10 @@ con el link a Configuración para prenderla.
 
 **Podés cargar más de un CV.** Si te postulás a dos clases de puesto, por
 ejemplo AI Engineer y Full Stack, cargá uno para cada una con *Agregar otro CV*.
-Cada CV tiene su nombre, sus propias palabras de búsqueda y su texto. Cuando hay
-más de uno cambian tres cosas:
+Cada CV tiene su nombre, los puestos que se buscan con él, sus habilidades y su
+texto. Cuando hay más de uno cambian tres cosas:
 
-- **Cada CV amplía la búsqueda.** Sus palabras se suman en todos los portales,
+- **Cada CV amplía la búsqueda.** Sus puestos se suman en todos los portales,
   también en los que tienen términos propios.
 - **Cada oferta se puntúa contra el CV que mejor le encaja**, no contra el
   primero. Una oferta de Full Stack ya no sale baja por compararla con el CV de AI.
@@ -407,6 +431,14 @@ los que quieras. Con más de uno, arriba aparece **Estás viendo el CV**, un
 desplegable que muestra uno por vez sin perder lo que todavía no guardaste.
 *Borrar este CV* pide confirmación y después lo borra de verdad, con su texto.
 El último no se puede borrar.
+
+**Puestos y habilidades van separados.** En *Puestos a buscar* va cómo se llama
+el puesto en los avisos ("Full Stack Developer", "Ingeniero de IA"); eso es lo
+que se busca. En *Habilidades* va lo que sabés hacer ("Python", "React"): no se
+busca, pero el modelo lo tiene en cuenta al puntuar, ordena el triaje y aparece
+en "Que además diga" de LinkedIn URLs. Antes era una sola lista, y buscar
+"React" en LinkedIn traía avisos de frontend y ocupaba uno de los tres lugares
+por corrida.
 
 ### Configuración
 
@@ -581,7 +613,8 @@ huecos marcados.
 ```jsonc
 {
   "cv_path": "resume/isaias.md",   // el CV en Markdown, se le pasa entero al modelo
-  "keywords": ["AI Engineer", "Python"],
+  "keywords": ["AI Engineer"],      // puestos: lo que se busca en los portales
+  "habilidades": ["Python"],       // no se buscan: van al modelo y al triaje
   "min_score": 60,                 // umbral 0-100 para avisar
   "top_n": 5,                      // cuántas mandar como máximo
   "max_new_per_run": 30,           // techo de llamadas al modelo por corrida
@@ -600,9 +633,9 @@ huecos marcados.
 ```json
 "cvs": [
   {"id": "ai-engineer", "nombre": "AI Engineer", "path": "resume/isaias.md",
-   "palabras_clave": ["AI Engineer", "LLM Engineer"]},
+   "palabras_clave": ["AI Engineer", "LLM Engineer"], "habilidades": ["RAG"]},
   {"id": "full-stack", "nombre": "Full Stack", "path": "resume/isaias-full-stack.md",
-   "palabras_clave": ["Full Stack", "React", "Next.js"]}
+   "palabras_clave": ["Full Stack Developer"], "habilidades": ["React", "Next.js"]}
 ]
 ```
 
@@ -611,10 +644,16 @@ un único CV. Lo que conviene saber:
 
 - **El `id` es lo que se guarda en cada oferta**, no el nombre: renombrar un CV no
   rompe las recomendaciones viejas. `cv_path` queda apuntando al primero.
-- **`palabras_clave` se suma a los términos de todas las fuentes**, incluidas las
-  que tienen `search_terms` propios. Las fuentes ya rotan los términos por día con
-  un tope por corrida, así que más términos reparten la cobertura entre días y no
-  multiplican los pedidos.
+- **`palabras_clave` son los puestos de ese CV** y se suman a los términos de
+  todas las fuentes, incluidas las que tienen `search_terms` propios.
+  `habilidades` no se busca nunca (ver *Mi perfil*). "Full Stack" y "Full-stack"
+  cuentan como una sola búsqueda.
+- **Las fuentes rotan los términos de corrida en corrida**, con un tope por
+  corrida (`max_searches`, `max_queries`): más términos reparten la cobertura y
+  no multiplican los pedidos. La posición de cada fuente queda en
+  `state/<perfil>/rotacion.json` y la guarda el motor al terminar, así que un
+  `--dry-run` no la mueve. Antes la tanda salía de la fecha, y las tres
+  corridas del día repetían las mismas búsquedas.
 - **Con un solo CV con texto, el prompt de scoring es exactamente el de siempre.**
   Con dos o más, el modelo ve todos, elige con cuál postularse y puntúa contra ése.
   Del bloque `candidate` se omite `profile`, porque describe a la persona desde uno
@@ -666,6 +705,22 @@ También se descarta antes lo que la fuente ya dijo que es de otro país. **Sól
 el país, y a propósito**: un híbrido en tu ciudad tiene que entrar aunque pidas
 sólo remoto, y para saber en qué ciudad es hace falta el dato que completa el
 modelo. Filtrar por modalidad antes de tenerlo tiraría justo ésas.
+
+**Con `allow_english: false`, lo que pide inglés también se descarta antes.**
+Hay dos chequeos sin modelo, sobre el **texto entero** del aviso:
+
+- **Un requisito escrito:** "inglés avanzado", "fluent English", "C1",
+  "English required". No dispara con "inglés deseable" ni con "is a plus".
+- **El aviso entero escrito en inglés:** se cuentan palabras como "the", "and",
+  "you" contra "de", "la", "que". Opina sólo cuando la diferencia es clara;
+  un aviso bilingüe o de dos renglones lo decide el modelo.
+
+El texto entero importa porque **las fuentes guardan sólo 3.000 caracteres**, y el
+requisito de inglés suele ir al final: se pasó una oferta así. El aviso completo
+se usa durante la corrida y no se guarda en el historial. Contra el historial
+de Isaías, el segundo chequeo coincidió con el modelo en 729 de 755 avisos en
+inglés y se equivocó en 1 de unos 850 en castellano. El juicio del modelo sigue
+como segunda capa, después del scoring. `scan_description: false` apaga los dos.
 
 ### Después del scoring
 
@@ -1128,7 +1183,8 @@ vacantia/
 ├── motivos.py        los motivos de descarte y cuáles enseñan
 ├── llm.py            cadena de modelos, y distinguir sus errores
 ├── state.py          quitar duplicados y persistencia, por perfil
-├── config.py         carga de perfiles y resolución de secretos
+├── config.py         carga de perfiles, puestos y habilidades, y secretos
+├── rotacion.py       qué términos le tocan a cada fuente en esta corrida
 ├── filters.py        ubicación, modalidad, idioma, no-ofertas, tecnologías y nivel
 ├── fechas.py         leer el 'posted_at' de cada portal (4 formatos distintos)
 ├── agenda.py         reparto de horarios entre perfiles

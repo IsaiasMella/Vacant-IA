@@ -242,7 +242,8 @@ def fijar_cvs(perfil: dict, cvs: list[dict]) -> None:
     """
     perfil["cvs"] = [
         {"id": cv["id"], "nombre": cv["nombre"], "path": cv["path"],
-         "palabras_clave": list(cv.get("palabras_clave") or [])}
+         "palabras_clave": list(cv.get("palabras_clave") or []),
+         "habilidades": list(cv.get("habilidades") or [])}
         for cv in cvs
     ]
     perfil["cv_path"] = perfil["cvs"][0]["path"]
@@ -271,7 +272,8 @@ def agregar_cv(nombre_perfil: str) -> str:
         ruta.write_text("", encoding="utf-8")
 
     fijar_cvs(perfil, cvs + [{"id": cv_id, "nombre": nombre_cv,
-                             "path": ruta.as_posix(), "palabras_clave": []}])
+                             "path": ruta.as_posix(), "palabras_clave": [],
+                             "habilidades": []}])
     guardar_perfil(nombre_perfil, perfil)
     logger.info(f"[ui] CV agregado a {nombre_perfil}: {cv_id} ({ruta})")
     return cv_id
@@ -809,9 +811,34 @@ def _filtradas(historial: list[dict], filtros: dict) -> list[dict]:
             if _vale_revisarla(h)]
 
 
+#: De qué puntaje para arriba se muestra una oferta en la pantalla.
+#:
+#: Pedido explícito: "menores a 50 no quiero ver nada". En el historial de
+#: isaias eran 1044 de las 1179 sin marcar, y tapaban las 135 que sí servían.
+#: No se borran del historial: siguen ahí para el dedupe (que no se vuelvan a
+#: puntuar) y para los gráficos, sólo no se listan.
+#:
+#: **Apliqué es la excepción**: si mandaste el CV a una de 40, tenés que poder
+#: encontrarla igual. Esa lista es para hacer seguimiento, no para elegir.
+PUNTAJE_PARA_MOSTRAR = 50
+
+
+def _se_muestra(oferta: dict) -> bool:
+    """¿Puntúa lo suficiente como para aparecer en la pantalla?
+
+    Sin puntaje se muestra: no se sabe si está debajo de 50, y esconderla sería
+    perder una oferta por un dato que falta. Hoy no pasa (si el modelo falla
+    puntúa la heurística), pero el corte es para las que puntúan bajo, no para
+    las que no puntuaron.
+    """
+    score = oferta.get("score")
+    return score is None or score >= PUNTAJE_PARA_MOSTRAR
+
+
 def _por_estado(historial: list[dict], ver: str, filtros: dict) -> list[dict]:
     if ver == "aplicadas":
         return [h for h in historial if h.get("aplicado") is True]
+    historial = [h for h in historial if _se_muestra(h)]
     if ver == "descartadas":
         return [h for h in historial if h.get("aplicado") is False]
     if ver == "archivadas":
@@ -960,15 +987,17 @@ def contar_ofertas(nombre_perfil: str, desde: str = "todo") -> dict[str, int]:
     historial = [h for h in State(nombre_perfil).load_history()
                  if _entra_por_fecha(h, desde)]
     filtros = filtros_del_perfil(nombre_perfil)
+    # El mismo criterio que usa la lista: si el número dijera 41 y la lista
+    # mostrara 10, el número estaría mintiendo. Por eso el corte de puntaje va
+    # en todos menos en Apliqué, igual que en `_por_estado`.
+    visibles = [h for h in historial if _se_muestra(h)]
     return {
-        "todas": len(historial),
-        # El mismo criterio que usa la lista: si el número dijera 41 y la lista
-        # mostrara 10, el número estaría mintiendo.
-        "pendientes": len(_sin_marcar(historial, filtros)),
+        "todas": len(visibles),
+        "pendientes": len(_sin_marcar(visibles, filtros)),
         "aplicadas": sum(1 for h in historial if h.get("aplicado") is True),
-        "descartadas": sum(1 for h in historial if h.get("aplicado") is False),
-        "filtradas": len(_filtradas(historial, filtros)),
-        "archivadas": sum(1 for h in historial if h.get("archivada")),
+        "descartadas": sum(1 for h in visibles if h.get("aplicado") is False),
+        "filtradas": len(_filtradas(visibles, filtros)),
+        "archivadas": sum(1 for h in visibles if h.get("archivada")),
     }
 
 

@@ -44,8 +44,9 @@ No hay linter configurado.
 - **Rutas relativas:** todas son relativas al directorio de trabajo (`STATE_ROOT = Path("state")`), así que todo se corre desde la raíz del repo.
 - **`instalar.bat`:** programa una tarea de Windows por cada perfil que haya en `profiles/`.
 
-**Varios CV por perfil.** El perfil tiene `cvs: [{id, nombre, path, palabras_clave}]`. Un perfil viejo con sólo `cv_path` se sintetiza como un CV `id="principal"` (`config.cvs_del_perfil`).
-- **Un solo punto para los términos de búsqueda:** `config.terminos_de_busqueda()`, que junta keywords del perfil y las de cada CV. Las fuentes no leen `search_terms` ni `keywords` directo.
+**Varios CV por perfil.** El perfil tiene `cvs: [{id, nombre, path, palabras_clave, habilidades}]`. Un perfil viejo con sólo `cv_path` se sintetiza como un CV `id="principal"` (`config.cvs_del_perfil`).
+- **Puestos y habilidades van separados:** `keywords` del perfil y `palabras_clave` de cada CV son los puestos, y se buscan. `habilidades` (del perfil y de cada CV) no se buscan: van al prompt de scoring, al triaje y a "Que además diga" de LinkedIn URLs (`config.habilidades_del_perfil`).
+- **Un solo punto para los términos de búsqueda:** `config.terminos_de_busqueda()`, que junta los puestos del perfil y los de cada CV. Las fuentes no leen `search_terms` ni `keywords` directo.
 - **Con un solo CV:** el prompt de scoring queda byte a byte igual al histórico.
 - **Con 2 o más:** la oferta guarda `cv_recomendado`, que es un id y no un nombre.
 

@@ -68,7 +68,7 @@ def test_un_perfil_con_solo_cv_path_se_lee_como_un_cv_principal(tmp_path, monkey
 
     assert config.cvs_del_perfil(perfil) == [
         {"id": "principal", "nombre": "AI Engineer", "path": "resume/x.md",
-         "palabras_clave": []}]
+         "palabras_clave": [], "habilidades": []}]
     assert config.load_resume(perfil) == "mi CV"
     # Sin headline, el nombre no queda vacío: una tarjeta que dijera "Mandá tu CV"
     # sin nombre no diría nada.
@@ -137,8 +137,9 @@ def test_todas_las_fuentes_buscan_con_los_terminos_de_los_cv():
                                                             "max_queries": 0})
     assert any("Full Stack" in q for q in consultas)
 
+    # `name` porque la rotación guarda la posición por fuente (ver `rotacion`).
     fuente = SimpleNamespace(config={"search_terms": ["LLM Engineer"]},
-                             profile=PERFIL_CON_CVS, max_queries=0)
+                             profile=PERFIL_CON_CVS, max_queries=0, name="computrabajo")
     assert "Full Stack" in portales_ar.PortalSource.terminos(fuente)
     clase_getonbrd = next(v for v in vars(getonbrd).values()
                           if isinstance(v, type) and "terminos" in vars(v))
@@ -444,7 +445,7 @@ def test_no_se_borra_un_archivo_que_lee_otro_perfil(sitio):
     papa = _perfil_leido(tmp)
     papa["name"] = "papa"
     papa["cvs"] = [{"id": "prestado", "nombre": "Prestado", "path": "resume/full.md",
-                    "palabras_clave": []}]
+                    "palabras_clave": [], "habilidades": []}]
     (tmp / "profiles" / "papa.json").write_text(json.dumps(papa), encoding="utf-8")
 
     post(base, "/cv-borrar", {"perfil": "test", "keywords": "Python",

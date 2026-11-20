@@ -103,6 +103,67 @@ def mentions_english_requirement(text: str) -> str:
     return ""
 
 
+# --- ¿En qué idioma está escrito el aviso? ---------------------------------
+# El LLM devuelve `posting_language`, pero recién después de pagar la llamada.
+# Medido en el historial de Isaías el 19/11/2026: de los descartes por idioma,
+# 17 eran "aviso en 'en'", todos de LinkedIn y Get on Board, y cada uno costó su
+# parte de un lote. Contar palabras vacías lo resuelve sin modelo: un aviso en
+# inglés está lleno de "the", "and", "you", "with", y uno en castellano de "de",
+# "la", "que", "y". Los nombres técnicos ("Machine Learning", "Full Stack") no
+# son palabras vacías, así que un aviso en castellano con mucha jerga en inglés
+# sigue contando como castellano.
+_VACIAS_EN = frozenset("""the and you your with our we to of for are will is this be
+an have in on as at or from that about who can what their they has""".split())
+_VACIAS_ES = frozenset("""de la el que y en los las con para por una un del se es al
+como su sus nuestro nuestra nuestros somos buscamos experiencia conocimientos
+trabajo equipo empresa muy""".split())
+_PALABRA = re.compile(r"[a-z]+")
+
+#: Cuántas palabras vacías hacen falta para opinar. Un snippet de buscador o un
+#: posteo de dos renglones no alcanza, y ahí se deja decidir al modelo.
+MINIMO_PARA_OPINAR = 15
+#: Cuántas veces más tiene que haber de un idioma que del otro. Un aviso
+#: bilingüe (la mitad en cada idioma) no llega a esto y no se descarta.
+VENTAJA_PARA_OPINAR = 3
+
+
+def idioma_del_texto(texto: str) -> str:
+    """"en", "es", o "" si no hay texto suficiente o está mezclado.
+
+    Es deliberadamente conservador: sólo contesta cuando la diferencia es
+    clara. Un "" no descarta nada; la oferta se puntúa y decide el modelo.
+    """
+    palabras = _PALABRA.findall(norm(texto or ""))
+    en = sum(1 for p in palabras if p in _VACIAS_EN)
+    es = sum(1 for p in palabras if p in _VACIAS_ES)
+    if en >= MINIMO_PARA_OPINAR and en >= VENTAJA_PARA_OPINAR * max(es, 1):
+        return "en"
+    if es >= MINIMO_PARA_OPINAR and es >= VENTAJA_PARA_OPINAR * max(en, 1):
+        return "es"
+    return ""
+
+
+def pide_ingles_sin_puntuar(job: Job, cfg: dict) -> str:
+    """Por qué el aviso pide inglés, mirándolo antes de pagar al modelo. "" si no.
+
+    Es la primera capa; la segunda sigue siendo el juicio del modelo en
+    `passes_language`, que ve lo que esto no ve (un aviso escueto que igual es
+    para clientes de afuera). Mira el **texto entero** del aviso, no la
+    descripción recortada que se guarda: el requisito suele ir al final.
+
+    Sólo actúa con el inglés desactivado. Con `scan_description: false` la
+    persona apagó la lectura del texto, y eso incluye ésta.
+    """
+    if cfg.get("allow_english", True) or not cfg.get("scan_description", True):
+        return ""
+    texto = job.texto_entero
+    if hit := mentions_english_requirement(texto):
+        return f"la descripción pide inglés ({hit!r})"
+    if idioma_del_texto(texto) == "en":
+        return "el aviso está escrito en inglés"
+    return ""
+
+
 # --- Vacantes ya cubiertas -------------------------------------------------
 # Un aviso cerrado sigue indexado y sigue llegando por las tres fuentes. No es
 # ruido inocuo: se puntúa con el LLM (plata y cuota) y llega al Telegram como
@@ -407,7 +468,7 @@ def passes_language(job: Job, cfg: dict) -> tuple[bool, str]:
     # Capa 4 — red determinista sobre el texto, por si las tres anteriores
     # fallaron. No depende del LLM.
     if cfg.get("scan_description", True):
-        hit = mentions_english_requirement(job.description)
+        hit = mentions_english_requirement(job.texto_entero)
         if hit:
             return False, f"la descripción pide inglés ({hit!r})"
 
@@ -633,7 +694,7 @@ def descartar_antes_de_puntuar(
 ) -> tuple[list[Job], list[tuple[Job, str]]]:
     """(las que valen una llamada al modelo, las descartadas con su motivo).
 
-    Dos motivos, los dos gratis:
+    Tres motivos, los tres gratis:
 
     1. **El título dice un puesto que la persona no hace.** Sale de
        `filters.excluir_titulos` en el perfil. Vacío = no descarta nada, así que
@@ -651,10 +712,15 @@ def descartar_antes_de_puntuar(
     por modalidad antes de tener la ciudad tiraría justo esas. El país no tiene
     ese problema: si el aviso es de Colombia, ninguna regla de ciudad lo salva.
 
+    3. **El aviso pide inglés y la persona no lo habla** (ver
+       `pide_ingles_sin_puntuar`). Medido el 19/11/2026: de 11 ofertas de
+       LinkedIn que se puntuaron, 9 se cayeron después por idioma.
+
     Lo que la fuente no sabe queda con el campo vacío y no filtra: ese aviso se
     puntúa igual, y después lo agarra `apply_filters`, como siempre.
     """
     cfg = profile.get("filters") or {}
+    idioma = cfg.get("language") or {}
     terminos = _as_list(cfg.get("excluir_titulos"))
     paises = _as_list((cfg.get("location") or {}).get("country"))
     latam = acepta_remoto_latam(cfg.get("location") or {})
@@ -667,6 +733,8 @@ def descartar_antes_de_puntuar(
         elif (paises and job.country and not _country_matches(job.country, paises)
               and not (latam and abierta_a_latam(job))):
             fuera.append((job, f"la fuente ya dijo que es de {job.country}"))
+        elif motivo := pide_ingles_sin_puntuar(job, idioma):
+            fuera.append((job, motivo))
         else:
             quedan.append(job)
     return quedan, fuera

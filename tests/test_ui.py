@@ -1361,6 +1361,9 @@ def test_el_puntaje_cero_se_ve(sitio):
 
     La caja del puntaje salía en blanco, y justo el 0 es el que más importa
     mostrar: es el que dice "esto no es para vos".
+
+    Desde el corte de 50 una de 0 sólo se ve en Apliqué, si le mandaste el CV
+    igual. Ahí se prueba.
     """
     from vacantia.ui.render import esc
 
@@ -1369,8 +1372,8 @@ def test_el_puntaje_cero_se_ve(sitio):
 
     base, tmp = sitio
     _con_historial(tmp, [{"url": "https://e/0", "title": "No es para vos",
-                          "aplicado": None, "score": 0, "found_at": HOY_ISO}])
-    _, html, _ = get(base, "/trabajos?perfil=test")
+                          "aplicado": True, "score": 0, "found_at": HOY_ISO}])
+    _, html, _ = get(base, "/trabajos?perfil=test&ver=aplicadas")
     assert ">0<span class=\"de\">" in html
 
 
@@ -1414,12 +1417,13 @@ def test_primero_las_que_mejor_encajan_y_no_las_mas_nuevas(sitio):
 
     Las que puntúan 0 son las que directamente no son para uno, y si entraron
     hoy quedaban arriba de todo: tres avisos de Lima en 0 antes que 29 ofertas
-    de 80 para arriba.
+    de 80 para arriba. Las de 0 ya no se listan (corte de 50), pero el orden
+    sigue valiendo entre las que quedan: una floja de hoy no pasa adelante.
     """
     base, tmp = sitio
     _con_historial(tmp, [
         {"url": "https://e/mala", "title": "Recien entrada pero no sirve",
-         "aplicado": None, "score": 0, "found_at": HOY_ISO, "posted_at": HOY_YMD},
+         "aplicado": None, "score": 55, "found_at": HOY_ISO, "posted_at": HOY_YMD},
         {"url": "https://e/buena", "title": "Vieja pero encaja",
          "aplicado": None, "score": 90, "found_at": "2026-08-01T10:00:00+00:00",
          "posted_at": "2026-08-01"},
@@ -1464,8 +1468,9 @@ def test_una_mala_de_hoy_no_sube_por_ser_de_hoy(sitio):
     """
     base, tmp = sitio
     _con_historial(tmp, [
+        # 55: se muestra (corte de 50) pero no llega al min_score de 60.
         {"url": "https://e/mala", "title": "De hoy pero no sirve",
-         "aplicado": None, "score": 10, "found_at": HOY_ISO, "posted_at": HOY_YMD},
+         "aplicado": None, "score": 55, "found_at": HOY_ISO, "posted_at": HOY_YMD},
         {"url": "https://e/buena", "title": "De hace una semana y encaja",
          "aplicado": None, "score": 90, "found_at": HOY_ISO,
          "posted_at": _dias_atras(6)},
@@ -1591,16 +1596,54 @@ def test_descarte_va_por_puntaje_para_poder_auditar_lo_bueno(sitio):
     base, tmp = sitio
     _con_historial(tmp, [
         {**_marcada("https://e/floja", "Floja pero recién descartada", "ACME",
-                    False, "2026-09-09T10:00:00+00:00", "no sirve"), "score": 0},
+                    False, "2026-09-09T10:00:00+00:00", "no sirve"), "score": 50},
         {**_marcada("https://e/buena", "Buena y descartada hace rato", "Otra SA",
                     False, "2026-08-01T10:00:00+00:00", "no sirve"), "score": 90},
         {**_marcada("https://e/media", "Del medio", "Tercera",
-                    False, "2026-09-08T10:00:00+00:00", "no sirve"), "score": 45},
+                    False, "2026-09-08T10:00:00+00:00", "no sirve"), "score": 70},
     ])
     _, html, _ = get(base, "/trabajos?perfil=test&ver=descartadas")
     assert (html.index("Buena y descartada hace rato")
             < html.index("Del medio")
             < html.index("Floja pero recién descartada"))
+
+
+def test_menos_de_50_no_se_ve_salvo_en_aplique(sitio):
+    """Pedido explícito: "menores a 50 no quiero ver nada".
+
+    Se cortan en todas las pestañas y en sus números, que si no el número dice
+    3 y la lista muestra 1. Apliqué es la excepción: si mandaste el CV a una de
+    40, la tenés que poder encontrar para hacer el seguimiento.
+    """
+    from vacantia.ui import data
+
+    base, tmp = sitio
+    _con_historial(tmp, [
+        {"url": "https://e/49", "title": "Cuarenta y nueve", "aplicado": None,
+         "score": 49, "found_at": HOY_ISO},
+        {"url": "https://e/50", "title": "Cincuenta justo", "aplicado": None,
+         "score": 50, "found_at": HOY_ISO},
+        {**_marcada("https://e/desc", "Descartada floja", "ACME",
+                    False, HOY_ISO, "no sirve"), "score": 20},
+        {**_marcada("https://e/apl", "Aplicada floja", "ACME",
+                    True, HOY_ISO), "score": 40},
+        {"url": "https://e/arch", "title": "Archivada floja", "aplicado": None,
+         "archivada": True, "score": 30, "found_at": HOY_ISO},
+    ])
+    for ver in ("pendientes", "todas", "descartadas", "archivadas"):
+        _, html, _ = get(base, f"/trabajos?perfil=test&ver={ver}")
+        for titulo in ("Cuarenta y nueve", "Descartada floja", "Archivada floja",
+                       "Aplicada floja"):
+            assert titulo not in html, (ver, titulo)
+    _, html, _ = get(base, "/trabajos?perfil=test&ver=pendientes")
+    assert "Cincuenta justo" in html
+
+    _, html, _ = get(base, "/trabajos?perfil=test&ver=aplicadas")
+    assert "Aplicada floja" in html
+
+    cuentas = data.contar_ofertas("test")
+    assert (cuentas["pendientes"], cuentas["todas"], cuentas["descartadas"],
+            cuentas["archivadas"], cuentas["aplicadas"]) == (1, 1, 0, 0, 1)
 
 
 def test_a_descarte_no_se_le_aplican_los_filtros_del_sistema(sitio):

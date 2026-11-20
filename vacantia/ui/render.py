@@ -1475,7 +1475,7 @@ def _constructor(perfil: str, elegido: dict, puestos: list[str],
     <label>Puestos</label>
     {_tildes("puesto", puestos, elegido.get("puestos"))}
     <p class="ayuda">Se buscan todos juntos: alcanza con que el posteo diga uno.
-    Salen de <b>Palabras clave</b>, en
+    Salen de <b>Puestos a buscar</b>, en
     <a href="/datos?perfil={esc(perfil)}">Mi perfil</a>: lo que agregues o saques
     ahí aparece o desaparece de acá.</p>
   </div>
@@ -1542,15 +1542,15 @@ def _constructor_jobs(perfil: str, elegido: dict, puestos: list[str],
     <label>Puestos</label>
     {_tildes("puesto", puestos, elegido.get("puestos"))}
     <p class="ayuda">Se buscan todos juntos: alcanza con que el aviso diga uno.
-    Salen de <b>Palabras clave</b>, en
+    Salen de <b>Puestos a buscar</b>, en
     <a href="/datos?perfil={esc(perfil)}">Mi perfil</a>.</p>
   </div>
   <div class="campo ancho">
     {_rotulo_con_ayuda('<label for="tambien">Que además diga</label>',
         "Palabras que el aviso tiene que tener, además del puesto, separadas "
         "por coma. Alcanza con que tenga una de ellas. Sirve para quedarte con "
-        "los que piden lo tuyo, por ejemplo: Python, RAG, OpenAI. Vacío, no "
-        "filtra nada.")}
+        "los que piden lo tuyo, por ejemplo: Python, RAG, OpenAI. Al entrar "
+        "viene con tus Habilidades de Mi perfil; borralo y no filtra nada.")}
     <input type="text" id="tambien" name="tambien" value="{esc(elegido.get("tambien", ""))}"
            placeholder="Python, RAG, OpenAI">
   </div>
@@ -1697,6 +1697,48 @@ def _todavia_sin_armar() -> str:
 </section>"""
 
 
+def _sugeridas(perfil: str, sugeridas: list[dict], guardados: list[dict],
+               tab: str = "publicaciones") -> str:
+    """Las búsquedas que conviene tener, armadas con tus puestos (ver
+    `linkedin_urls.sugeridas`). Cada una se abre o se guarda con un toque.
+
+    Las que ya guardaste no se repiten acá: ya están abajo, en tus guardadas.
+    Si están todas guardadas, la sección desaparece.
+    """
+    ya = {f.get("url") for f in guardados}
+    quedan = [s for s in sugeridas if s.get("url") not in ya]
+    if not quedan:
+        return ""
+    if tab == "jobs":
+        explica = ("Avisos de las últimas 2 horas, remotos y con menos de 10 "
+                   "candidatos: llegás entre los primeros. Abrilas dos o tres "
+                   "veces por día. Los puestos en castellano no van: en Empleos "
+                   "traen los mismos avisos que en inglés.")
+    else:
+        explica = ("Posteos de las últimas 24 horas que dicen «buscamos» o «estamos "
+                   "buscando», con tus puestos en grupos chicos: con más de 110 "
+                   "letras LinkedIn devuelve cero. Los puestos en castellano van "
+                   "primero, porque acá sí traen posteos en castellano.")
+    filas = "".join(f"""<li class="favorito sugerida">
+  <div class="datos">
+    <h3>{esc(s["nombre"])}</h3>
+    <p class="url-generada chica">{esc(s["url"])}</p>
+  </div>
+  <div class="acciones">
+    <a class="boton" href="{esc(s["url"])}" {ABRIR_EL_AVISO}>Abrir</a>
+    <form method="post" action="/linkedin-favorito">
+      <input type="hidden" name="perfil" value="{esc(perfil)}">
+      <input type="hidden" name="tab" value="{esc(tab)}">
+      <input type="hidden" name="url" value="{esc(s["url"])}">
+      <input type="hidden" name="nombre" value="{esc(s["nombre"])}">
+      <button type="submit">Guardar</button>
+    </form>
+  </div>
+</li>""" for s in quedan)
+    return f"""<div class="titulo-con-ayuda"><h2>Sugeridas para vos</h2>{_ayuda_al_lado(explica, abajo=True)}</div>
+<ul class="favoritos sugeridas">{filas}</ul>"""
+
+
 def _favoritos(perfil: str, guardados: list[dict], tab: str = "publicaciones") -> str:
     """Las búsquedas que ya sabés que sirven, para no rearmarlas cada vez.
 
@@ -1757,7 +1799,8 @@ def linkedin(perfil: str, tab: str, mensajes: list[tuple[str, str]],
              elegido: dict | None = None, url: str = "",
              guardados: list[dict] | None = None,
              puestos: list[str] | None = None,
-             apliques: dict | None = None) -> str:
+             apliques: dict | None = None,
+             sugeridas: list[dict] | None = None) -> str:
     """Las direcciones de búsqueda de LinkedIn, en dos pestañas.
 
     Las pestañas son navegación adentro de la sección, no un filtro, y por eso
@@ -1811,6 +1854,7 @@ se llenaron de postulantes. Estas direcciones las muestran apenas se publican.""
 <div class="lado controles">{controles}</div>
 <div class="lado resultado">{recorte}\
 {_bloque_de_url(perfil, url, nombre, ya, tab) if url else _todavia_sin_armar()}\
+{_sugeridas(perfil, sugeridas or [], guardados, tab)}\
 {_favoritos(perfil, guardados, tab)}</div>
 </div>"""
 

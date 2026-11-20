@@ -229,7 +229,7 @@ def _selector_de_cv(cvs: list[dict], elegido: str) -> str:
 
 
 def _bloque_de_cv(cv: dict, cuantos: int, activo: bool = False) -> str:
-    """Un CV: cómo se llama, qué buscar con él, y el texto.
+    """Un CV: cómo se llama, qué puestos buscar con él, sus habilidades y el texto.
 
     Los botones de agregar y borrar van **adentro del formulario grande** y no
     en uno propio, con `formaction`. Es a propósito: un formulario no puede ir
@@ -259,9 +259,19 @@ def _bloque_de_cv(cv: dict, cuantos: int, activo: bool = False) -> str:
     return f"""<div class="{clase}" id="cv-{esc(cv['id'])}">
   {_campo(prefijo + "nombre", "Nombre de este CV", cv["nombre"], placeholder="Full Stack",
           ayuda="Es el que aparece en cada oferta: “Mandá tu CV Full Stack”.")}
-  {_campo(prefijo + "palabras", "Qué buscar con este CV", _lista(cv["palabras_clave"]),
-          placeholder="Full Stack, React, Next.js",
-          ayuda="Separadas por coma. Se suman a las palabras clave en todos los portales.")}
+  {_campo(prefijo + "palabras", "Puestos a buscar con este CV", _lista(cv["palabras_clave"]),
+          placeholder="Full Stack Developer, Desarrollador Full Stack",
+          ayuda="Nombres de puesto, separados por coma. Son los que se buscan en los portales.",
+          mas="Poné cómo se llama el puesto en los avisos, no lo que sabés hacer: "
+              "buscar «React» en LinkedIn trae avisos de frontend, y cada "
+              "búsqueda ocupa uno de los pocos lugares que hay por corrida. "
+              "Lo que sabés hacer va en Habilidades.")}
+  {_campo(prefijo + "habilidades", "Habilidades de este CV", _lista(cv.get("habilidades") or []),
+          placeholder="Python, React, Next.js",
+          ayuda="Separadas por coma. No se buscan: afinan las búsquedas y ayudan a puntuar.",
+          mas="El modelo las tiene en cuenta al puntuar cada oferta, y en "
+              "LinkedIn URLs aparecen solas en «Que además diga» de la pestaña "
+              "Jobs, para quedarte con los avisos que piden lo tuyo.")}
   {_area(prefijo + "texto", "El CV", cv["texto"], 14,
          ayuda="Texto plano o Markdown. Cuanto más concreto, mejor puntúa.")}
   {borrar}
@@ -315,8 +325,11 @@ dice con cuál mandarte, y cada CV suma sus propias búsquedas.</p>
 
 <h2>Qué busco</h2>
 <div class="grilla">
-  {_campo("keywords", "Palabras clave", _lista(perfil.get("keywords")),
-          ayuda="Separadas por coma. Es lo que se busca en los portales.")}
+  {_campo("keywords", "Puestos a buscar", _lista(perfil.get("keywords")),
+          ayuda="Separados por coma. Se suman a los de cada CV en todos los portales.")}
+  {_campo("habilidades", "Habilidades", _lista(perfil.get("habilidades") or []),
+          placeholder="Python, FastAPI",
+          ayuda="Separadas por coma. Se suman a las de cada CV; no se buscan.")}
   {_campo("excluir_titulos", "Puestos que NO quiero",
           _lista((filtros.get("excluir_titulos")) or []),
           placeholder="Data Steward, MLOps",
@@ -641,6 +654,8 @@ def aplicar_datos(nombre: str, form: dict) -> list[tuple[str, str]]:
 
     if "keywords" in form:
         perfil["keywords"] = _lista_desde(form.get("keywords", ""))
+    if "habilidades" in form:
+        perfil["habilidades"] = _lista_desde(form.get("habilidades", ""))
 
     filtros = perfil.setdefault("filters", {})
     loc = filtros.setdefault("location", {})
@@ -694,6 +709,8 @@ def aplicar_datos(nombre: str, form: dict) -> list[tuple[str, str]]:
             cv["nombre"] = form.get(f"{prefijo}nombre", "").strip() or cv["nombre"]
         if f"{prefijo}palabras" in form:
             cv["palabras_clave"] = _lista_desde(form.get(f"{prefijo}palabras", ""))
+        if f"{prefijo}habilidades" in form:
+            cv["habilidades"] = _lista_desde(form.get(f"{prefijo}habilidades", ""))
         if f"{prefijo}texto" in form:
             textos[cv["path"]] = form.get(f"{prefijo}texto", "")
     # El formulario de antes mandaba un solo campo `cv`. Si llega, va al primero.

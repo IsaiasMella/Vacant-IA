@@ -21,6 +21,7 @@ from vacantia.models import Job
 from vacantia.notifiers import build_notifiers
 from vacantia.notifiers.base import Notifier
 from vacantia.notifiers.console import ConsoleNotifier
+from vacantia import rotacion
 from vacantia.scoring import filter_by_min_score, score_jobs, triage
 from vacantia.sources import build_sources
 from vacantia.sources.base import Source
@@ -290,6 +291,11 @@ def run(profile: dict, dry_run: bool = False) -> RunResult:
     # mientras el buscador las tenga indexadas.
     state.mark_seen(to_score + [j for j, _ in cubiertas])
     state.save(scored)
+    # La próxima corrida sigue la rotación de términos desde donde quedó ésta.
+    # Va acá y no en cada fuente para que un --dry-run no la mueva.
+    rotacion.guardar(name, {s.name: s.siguiente_en_rotacion for s in sources
+                            if s.siguiente_en_rotacion is not None},
+                     root=state.dir.parent)
 
     # 9) embudo. "Avisada" es lo que salió por un canal que la persona lee: la
     #    consola sola no cuenta, porque devuelve True aunque Telegram haya fallado.

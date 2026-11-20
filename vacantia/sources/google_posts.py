@@ -36,6 +36,7 @@ import re
 import time
 from datetime import date
 
+from vacantia import rotacion
 from vacantia.config import terminos_de_busqueda
 from vacantia.config import resolve_secret
 from vacantia.fechas import dias_desde, parse_posted
@@ -267,21 +268,25 @@ def buscar_en_tinyfish(client, query: str, language: str, limite: int,
 
 
 def build_queries(profile: dict, config: dict) -> list[str]:
-    """Una query por rol. Se rotan entre corridas para cubrirlos todos.
+    """Una query por rol. Se rotan entre corridas para cubrirlos todos."""
+    return _queries_y_siguiente(profile, config)[0]
+
+
+def _queries_y_siguiente(profile: dict, config: dict) -> tuple[list[str], int | None]:
+    """Las queries de esta corrida y desde dónde sigue la próxima.
 
     Si hay más roles que `max_queries`, arrancar siempre desde el primero haría
-    que los últimos no se consultaran nunca. El offset por día del calendario
-    los va rotando sin necesidad de guardar estado.
+    que los últimos no se consultaran nunca. La posición se guarda por corrida
+    en `state/<perfil>/rotacion.json` (ver `rotacion`): con la fecha, las tres
+    corridas del día repetían las mismas búsquedas.
     """
     roles = terminos_de_busqueda(profile, config.get("roles")) or DEFAULT_ROLES
     roles = [str(r).strip() for r in roles if str(r).strip()]
     if not roles:
-        return []
+        return [], None
 
     max_queries = int(config.get("max_queries", 6) or len(roles))
-    if 0 < max_queries < len(roles):
-        offset = date.today().toordinal() % len(roles)
-        roles = [roles[(offset + i) % len(roles)] for i in range(max_queries)]
+    roles, siguiente = rotacion.elegir(profile, "google_posts", roles, max_queries)
 
     hiring = config.get("hiring_terms") or _hiring_terms_for(profile)
     extra = config.get("extra_terms")
@@ -297,7 +302,7 @@ def build_queries(profile: dict, config: dict) -> list[str]:
         if extra_clause:
             query = f"{query} {extra_clause}"
         queries.append(query)
-    return queries
+    return queries, siguiente
 
 
 def clean_title(raw_title: str, snippet: str) -> tuple[str, str]:
@@ -457,7 +462,7 @@ class GooglePostsSource(Source):
     # --- interfaz Source ------------------------------------------------
 
     def fetch(self) -> list[Job]:
-        queries = build_queries(self.profile, self.config)
+        queries, self.siguiente_en_rotacion = _queries_y_siguiente(self.profile, self.config)
         ventana = (f", últimos {self.max_age_days} día(s)" if self.max_age_days
                    else ", sin ventana de tiempo")
         logger.info(

@@ -306,7 +306,7 @@ def test_los_puestos_salen_de_las_palabras_clave_del_perfil(sitio):
     assert 'value="GenAI Engineer"' not in final
     assert 'value="Python"' in final
     # Y la pantalla dice de dónde salen, para que no haya que adivinarlo.
-    assert "Salen de <b>Palabras clave</b>" in final
+    assert "Salen de <b>Puestos a buscar</b>" in final
 
 
 def test_sin_palabras_clave_ofrece_las_sugeridas(sitio):

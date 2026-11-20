@@ -8,7 +8,7 @@ que venga) y sale la misma lista con score, stack, reason y worth_applying.
 import json
 import time
 
-from vacantia.config import id_de_cv
+from vacantia.config import habilidades_del_perfil, id_de_cv
 from vacantia.consejo import cv_que_mejor_encaja
 from vacantia.filters import seniority_minima, tecnologias_que_no_usa
 from vacantia.llm import chat_with_llm, has_llm_credentials
@@ -248,6 +248,12 @@ def build_candidate_profile(profile: dict, varios_cv: bool = False) -> str:
     keywords = profile.get("keywords") or []
     if keywords:
         lines.append(f"- Keywords of interest: {', '.join(keywords)}")
+    # Las habilidades van aparte de los puestos (ver `config.habilidades_del_perfil`):
+    # antes estaban mezcladas en `keywords` y llegaban al modelo como "puestos de
+    # interés". Un perfil sin habilidades cargadas no suma la línea, así que su
+    # prompt queda igual que antes.
+    if habilidades := habilidades_del_perfil(profile):
+        lines.append(f"- Skills: {', '.join(habilidades)}")
     # Con "NO suitable" en texto libre no alcanzaba: Isaías lo tenía para los
     # puestos de ML y el modelo igual dejaba pasar "Backend Java o .NET" porque
     # el aviso también pedía React. Es una lista aparte porque el filtro la usa
@@ -415,6 +421,16 @@ def _score_batch_with_llm(jobs: list[Job], cvs: list[dict], profile: dict,
     return jobs
 
 
+def _palabras_del_triaje(profile: dict) -> list[str]:
+    """Puestos y habilidades, en minúsculas: lo que se busca en el aviso.
+
+    Las habilidades suman acá aunque no se busquen en los portales: un aviso que
+    dice "FastAPI" pinta mejor que uno que no, y eso es lo que ordena el triaje.
+    """
+    todas = list(profile.get("keywords") or []) + habilidades_del_perfil(profile)
+    return [k.lower() for k in todas if k]
+
+
 def _heuristic_score(job: Job, keywords: list[str], resume_words: set[str]) -> tuple[int, list[str]]:
     """Puntaje por solapamiento de keywords. Puro: no toca el Job.
 
@@ -450,7 +466,7 @@ def triage(jobs: list[Job], resume, profile: dict) -> tuple[list[Job], list[Job]
         return jobs, []
 
     limit = int(limit)
-    keywords = [k.lower() for k in (profile.get("keywords") or []) if k]
+    keywords = _palabras_del_triaje(profile)
     resume_words = _palabras_de(_como_cvs(resume))
 
     ranked = sorted(
@@ -471,7 +487,7 @@ def _score_batch_heuristic(jobs: list[Job], cvs: list[dict], profile: dict,
     No pretende reemplazar al LLM — existe para que el pipeline corra completo
     sin credenciales (primera corrida, CI, debug de fuentes nuevas).
     """
-    keywords = [k.lower() for k in (profile.get("keywords") or []) if k]
+    keywords = _palabras_del_triaje(profile)
     resume_words = _palabras_de(cvs)
 
     for job in jobs:

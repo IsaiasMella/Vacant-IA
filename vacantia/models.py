@@ -103,6 +103,13 @@ class Job:
     description: str = ""
     posted_at: str = ""
     raw: dict[str, Any] = field(default_factory=dict)
+    # El texto ENTERO del aviso, sólo en memoria: no se guarda en el historial
+    # (ver `to_dict`). `description` se corta en 3.000 caracteres porque es lo
+    # que se guarda y lo que ve el modelo, y el requisito de inglés suele ir al
+    # final, en "Requisitos" o "Nice to have": se pasó una oferta que pedía
+    # inglés justo después del corte. El chequeo de idioma lee éste.
+    # "" = la fuente no trajo más que `description`.
+    descripcion_completa: str = ""
 
     # --- Campos que completa el scoring (vacíos hasta que corre) ---
     score: int | None = None
@@ -203,8 +210,17 @@ class Job:
     def display_location(self) -> str:
         return self.location_remote or self.location or "?"
 
+    @property
+    def texto_entero(self) -> str:
+        """La descripción completa si la fuente la trajo; si no, la recortada."""
+        return self.descripcion_completa or self.description
+
     def to_dict(self) -> dict:
-        return asdict(self)
+        datos = asdict(self)
+        # 6 MB pesa ya el historial de un perfil con la descripción recortada.
+        # El texto entero sirve para decidir en la corrida, no para guardarlo.
+        datos.pop("descripcion_completa", None)
+        return datos
 
     @classmethod
     def from_dict(cls, data: dict) -> "Job":

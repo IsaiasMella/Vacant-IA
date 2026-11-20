@@ -24,6 +24,10 @@ class Source(ABC):
         #: esto, Get on Board perdía 2.000 avisos por antigüedad en cinco
         #: semanas y sólo quedaba un número suelto en el log.
         self.descartes: list[dict] = []
+        #: Desde dónde sigue la rotación de términos en la próxima corrida, o
+        #: None si esta fuente no rota. Lo escribe la fuente al armar su tanda y
+        #: lo guarda el motor sólo si la corrida termina de verdad (ver `rotacion`).
+        self.siguiente_en_rotacion: int | None = None
 
     def descartar(self, url: str, titulo: str, motivo: str, empresa: str = "") -> None:
         """Anota algo que la fuente encontró y no devuelve, con el porqué."""

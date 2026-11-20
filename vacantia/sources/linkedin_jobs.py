@@ -22,8 +22,8 @@ import io
 import logging
 import sys
 import time
-from datetime import date
 
+from vacantia import rotacion
 from vacantia.config import terminos_de_busqueda
 from vacantia.log import get_logger
 from vacantia.models import Job
@@ -111,23 +111,25 @@ def split_location(location: str) -> tuple[str, str, str]:
 
 
 def build_searches(profile: dict, config: dict) -> list[tuple[str, str]]:
-    """Producto (término, ubicación), rotado por día si hay más que `max_searches`."""
+    """Producto (término, ubicación), rotado por corrida si hay más que `max_searches`."""
+    return _busquedas_y_siguiente(profile, config)[0]
+
+
+def _busquedas_y_siguiente(profile: dict, config: dict) -> tuple[list[tuple[str, str]], int | None]:
+    """Las búsquedas de esta corrida y desde dónde sigue la próxima (ver `rotacion`)."""
     terms = terminos_de_busqueda(profile, config.get("search_terms")) or DEFAULT_SEARCH_TERMS
     terms = [str(t).strip() for t in terms if str(t).strip()]
     locations = config.get("locations") or DEFAULT_LOCATIONS
     locations = [str(l).strip() for l in locations if str(l).strip()]
     if not terms or not locations:
-        return []
+        return [], None
 
     combos = [(t, loc) for loc in locations for t in terms]
 
+    # Sin rotación, los últimos términos no se consultarían nunca. **El tope no
+    # se sube sin medir**: es scraping sin login y LinkedIn corta por IP.
     max_searches = int(config.get("max_searches", 4) or len(combos))
-    if 0 < max_searches < len(combos):
-        # Mismo criterio que google_posts: sin rotación, los últimos términos
-        # no se consultarían nunca.
-        offset = date.today().toordinal() % len(combos)
-        combos = [combos[(offset + i) % len(combos)] for i in range(max_searches)]
-    return combos
+    return rotacion.elegir(profile, "linkedin", combos, max_searches)
 
 
 @contextlib.contextmanager
@@ -269,6 +271,7 @@ class LinkedInJobsSource(Source):
             source=self.name,
             location=location,
             description=description[:3000],
+            descripcion_completa=description,
             posted_at=_val(row, "date_posted"),
             country=country,
             city=city,
@@ -284,7 +287,7 @@ class LinkedInJobsSource(Source):
     # --- interfaz Source ------------------------------------------------
 
     def fetch(self) -> list[Job]:
-        searches = build_searches(self.profile, self.config)
+        searches, self.siguiente_en_rotacion = _busquedas_y_siguiente(self.profile, self.config)
         logger.info(
             f"[linkedin] {len(searches)} búsqueda(s) "
             f"(remoto={self.is_remote}, últimas {self.hours_old}h, "

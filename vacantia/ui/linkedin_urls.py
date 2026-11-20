@@ -31,11 +31,12 @@ sea igual a la que él genera y no haya que preguntarse si son la misma.
 """
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
-from vacantia.config import terminos_de_busqueda
+from vacantia.config import habilidades_del_perfil, terminos_de_busqueda
 from vacantia.log import get_logger
 from vacantia.state import STATE_ROOT
 
@@ -43,10 +44,10 @@ logger = get_logger()
 
 BASE = "https://www.linkedin.com/search/results/content/"
 
-#: Los puestos que se ofrecen cuando el perfil no tiene ninguna palabra clave
-#: cargada. **No es la lista que se usa normalmente**: esa sale del perfil, del
-#: campo *Palabras clave* de Mi perfil, para que haya un solo lugar donde
-#: agregar o sacar un puesto y no dos que se desincronizan.
+#: Los puestos que se ofrecen cuando el perfil no tiene ninguno cargado. **No es
+#: la lista que se usa normalmente**: esa sale del perfil, de *Puestos a buscar*
+#: en Mi perfil, para que haya un solo lugar donde agregar o sacar un puesto y
+#: no dos que se desincronizan.
 #:
 #: Salen de `sistema_De_likns_post_linkedin.md`: la idea es cubrir cómo escribe
 #: el puesto cada reclutador, que no es una sola forma.
@@ -59,14 +60,36 @@ PUESTOS_SUGERIDOS = (
 def puestos_de(perfil: dict) -> list[str]:
     """Los puestos que se ofrecen en el constructor.
 
-    Son **las palabras clave del perfil y las de cada CV**, las mismas que usa
-    el motor para buscar en los portales. Un solo lugar donde se agregan y se
-    sacan: si el constructor tuviera su propia lista, agregar un puesto habría
-    que hacerlo dos veces y tarde o temprano quedarían distintas.
+    Son **los puestos del perfil y los de cada CV**, los mismos que usa el motor
+    para buscar en los portales. Un solo lugar donde se agregan y se sacan: si
+    el constructor tuviera su propia lista, agregar un puesto habría que hacerlo
+    dos veces y tarde o temprano quedarían distintas.
+
+    Las habilidades no aparecen acá (ver `habilidades_de`): `Python AND
+    buscamos` trae cualquier posteo que nombre Python.
     """
     crudas = terminos_de_busqueda(perfil or {})
     puestos = [str(k).strip() for k in crudas if str(k).strip()]
     return puestos or list(PUESTOS_SUGERIDOS)
+
+
+#: Cuántas habilidades precarga "Que además diga". Con el CV entero de Isaías
+#: eran 25, y `AND (JavaScript OR SQL Server OR Jest OR ...)` deja pasar casi
+#: cualquier aviso técnico: un grupo OR largo ya no filtra, sólo alarga la URL.
+#: Van las primeras (las del perfil, después las de cada CV), que son las de
+#: siempre; la persona agrega o saca las que quiera antes de armar.
+MAX_HABILIDADES_PRECARGADAS = 6
+
+
+def habilidades_de(perfil: dict) -> str:
+    """Las primeras habilidades del perfil y de cada CV, para "Que además diga".
+
+    Van como texto separado por comas porque así es el campo: la persona las ve
+    y saca las que no quiera antes de armar. Al modelo y al triaje les llegan
+    todas (`config.habilidades_del_perfil`); el tope es sólo para la búsqueda.
+    """
+    todas = habilidades_del_perfil(perfil or {})
+    return ", ".join(todas[:MAX_HABILIDADES_PRECARGADAS])
 
 #: Las frases con las que un reclutador anuncia que está buscando. Son las que
 #: convierten una búsqueda de tema ("AI Engineer") en una de vacante.
@@ -403,6 +426,140 @@ def nombre_sugerido_jobs(puestos=(), cuando: str = "24h",
     if sencilla:
         partes.append("solicitud sencilla")
     return ", ".join(partes)
+
+
+# --- búsquedas sugeridas ------------------------------------------------------
+#
+# Las que conviene tener guardadas, armadas con los puestos del perfil para no
+# tener que descubrirlas a mano. Salen de la investigación del 19/11/2026
+# contra LinkedIn (unas 1.000 ofertas de los últimos 30 días):
+#
+#   - **LinkedIn Jobs busca por significado.** "AI Engineer", "LLM Engineer" y
+#     "Desarrollador IA" devuelven casi las mismas ofertas, y en inglés: un
+#     título en castellano no trae avisos en castellano. Por eso las de Jobs no
+#     repiten los títulos en castellano.
+#   - **El buscador de Publicaciones busca la frase exacta**, y ahí el título
+#     en castellano sí trae posteos en castellano. Por eso las de Publicaciones
+#     usan todos los puestos.
+#
+# Ninguna se guarda sola: se muestran con un botón para guardarlas, y la
+# persona decide cuáles le sirven.
+
+#: Las de Jobs: lo más fresco, remoto y con poca competencia. Dos horas y no una
+#: porque "última hora" junto con "menos de 10 candidatos" trae muy poco y a
+#: veces cero, como avisa el globo del constructor.
+SUGERIDA_JOBS = {"donde": "argentina", "modalidades": ("2",), "cuando": "2h",
+                 "orden": "recientes", "pocos_candidatos": True}
+
+#: Cuántas sugeridas se muestran por pestaña. Con más, la columna se vuelve una
+#: lista que nadie revisa entera, y la idea es abrirlas dos o tres veces por día.
+#: Con 5 entran, en el perfil de Isaías, los seis títulos en castellano y el de
+#: Forward Deployed.
+MAX_SUGERIDAS = 5
+
+#: Las palabras con las que empieza un puesto escrito en castellano. Sirven para
+#: no repetir en Jobs lo que ya trae su par en inglés (ver arriba).
+_PUESTO_EN_CASTELLANO = re.compile(
+    r"^(ingenier[oa]|desarrollador[a]?|especialista|analista|programador[a]?|"
+    r"arquitect[oa]|t[eé]cnic[oa]|cient[ií]fic[oa])\b", re.IGNORECASE)
+
+#: Frases que en Publicaciones conviene acortar. La búsqueda es por frase
+#: exacta, y "Forward Deployed Engineer" no encuentra "Forward Deployed AI
+#: Engineer" ni "Forward Deployed Software Engineer", que son el mismo puesto.
+ATAJOS_PUBLICACIONES = {"forward deployed engineer": "Forward Deployed"}
+
+
+def _nombre_de_tanda(tanda: list[str], detalle: str) -> str:
+    """"AI Engineer y 3 más, últimas 2 horas": que se vea que busca varios."""
+    que = tanda[0] + (f" y {len(tanda) - 1} más" if len(tanda) > 1 else "")
+    return f"{que}, {detalle}"
+
+
+def _en_tandas(puestos: list[str], entra) -> list[list[str]]:
+    """Agrupa los puestos en el orden en que vienen, mientras `entra(tanda)`.
+
+    Un puesto que no entra ni solo se saltea: no hay forma de buscarlo sin
+    pasarse del tope, y una búsqueda que devuelve cero es peor que ninguna.
+    """
+    tandas: list[list[str]] = []
+    actual: list[str] = []
+    for puesto in puestos:
+        if entra(actual + [puesto]):
+            actual.append(puesto)
+        elif actual and entra([puesto]):
+            tandas.append(actual)
+            actual = [puesto]
+    if actual:
+        tandas.append(actual)
+    return tandas
+
+
+def sugeridas_jobs(perfil: dict) -> list[dict]:
+    """[{nombre, url}] para la pestaña Jobs: últimas 2 horas, remoto, <10 candidatos.
+
+    Los puestos en castellano se dejan afuera si hay alguno en inglés: en Jobs
+    traen las mismas ofertas. Si todos están en castellano (un perfil de
+    seguridad e higiene, por ejemplo), se usan ésos.
+
+    El texto de cada una respeta el mismo tope que Publicaciones. En Jobs ese
+    corte no se midió (el documento de estrategia usa búsquedas de 130 letras
+    que andan), pero quedarse por debajo no cuesta nada.
+    """
+    puestos = puestos_de(perfil)
+    en_ingles = [p for p in puestos if not _PUESTO_EN_CASTELLANO.match(p)]
+    puestos = en_ingles or puestos
+    tandas = _en_tandas(puestos, lambda t: len(armar_boolean_jobs(t)) <= TOPE_KEYWORDS)
+
+    salida = []
+    for tanda in tandas[:MAX_SUGERIDAS]:
+        c = SUGERIDA_JOBS
+        url = armar_url_jobs(armar_boolean_jobs(tanda), c["donde"], c["modalidades"],
+                             (), c["cuando"], c["orden"], c["pocos_candidatos"])
+        salida.append({"nombre": _nombre_de_tanda(
+            tanda, "últimas 2 horas, remoto, menos de 10 candidatos"), "url": url})
+    return salida
+
+
+def sugeridas_publicaciones(perfil: dict) -> list[dict]:
+    """[{nombre, url}] para Publicaciones: posteos en castellano de las últimas 24 h.
+
+    Cada una lleva al menos dos frases de contratación y todos los NOT que
+    entren, sin pasar de `TOPE_KEYWORDS` (lo arma `armar_boolean`, que ya sabe
+    qué sacrificar). Los puestos se agrupan para que eso se cumpla: dos o tres
+    por búsqueda, no los catorce juntos.
+
+    **Los puestos en castellano van primero**: es donde Publicaciones le gana a
+    Jobs, porque acá la frase exacta sí trae posteos en castellano.
+    """
+    vistos, puestos = set(), []
+    for p in puestos_de(perfil):
+        corto = ATAJOS_PUBLICACIONES.get(p.lower(), p)
+        if corto.lower() not in vistos:
+            vistos.add(corto.lower())
+            puestos.append(corto)
+    # `sorted` es estable: dentro de cada grupo se respeta el orden del perfil.
+    puestos = sorted(puestos, key=lambda p: not _PUESTO_EN_CASTELLANO.match(p))
+
+    def entra(tanda):
+        texto = armar_boolean(tanda, GATILLOS_ES, (), EXCLUIR)
+        # `armar_boolean` nunca se pasa del tope, pero para lograrlo saca
+        # gatillos: sin dos gatillos la búsqueda trae charlas sobre el tema.
+        return (len(texto) <= TOPE_KEYWORDS and all(_frase(p) in texto for p in tanda)
+                and que_entro_en(texto, GATILLOS_ES, EXCLUIR)["gatillos"] >= 2)
+
+    salida = []
+    for tanda in _en_tandas(puestos, entra)[:MAX_SUGERIDAS]:
+        texto = armar_boolean(tanda, GATILLOS_ES, (), EXCLUIR)
+        salida.append({"nombre": _nombre_de_tanda(tanda, "últimas 24 horas"),
+                       "url": armar_url(texto, "24h", "recientes", "todos")})
+    return salida
+
+
+def sugeridas(perfil: dict, tipo: str) -> list[dict]:
+    """Las sugeridas de la pestaña que se está mirando."""
+    if tipo_de(tipo) == "jobs":
+        return sugeridas_jobs(perfil)
+    return sugeridas_publicaciones(perfil)
 
 
 #: Las pestañas, con el principio de dirección que distingue sus favoritos.

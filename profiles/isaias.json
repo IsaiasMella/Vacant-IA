@@ -3,11 +3,19 @@
   "cv_path": "resume/isaias.md",
   "keywords": [
     "Full Stack",
+    "Full-stack"
+  ],
+  "habilidades": [
     "Python",
     "FastAPI",
-    "React",
-    "Next.js",
-    "Full-stack"
+    "TypeScript",
+    "JavaScript",
+    "PostgreSQL",
+    "SQLAlchemy",
+    "Alembic",
+    "SQL Server",
+    "Pytest",
+    "Clean Architecture"
   ],
   "min_score": 60,
   "top_n": 5,
@@ -66,7 +74,7 @@
     "name": "Isaías",
     "profile": "AI Engineer: conecto modelos ya entrenados (OpenAI, LLMs open source) a producto. RAG, function calling, agentes y APIs con Python y FastAPI.",
     "seeking": "Trabajo 100% remoto desde Argentina. Vive en Bahía Blanca.",
-    "not_suitable": "NO entrena modelos ni construye redes neuronales: conecta modelos ya entrenados a producto. Por eso NO sirven los puestos de Machine Learning Engineer, Data Scientist, MLOps, Deep Learning, Computer Vision ni nada que pida entrenar, hacer fine-tuning o armar arquitecturas de modelos. Tampoco: puestos junior, roles no técnicos, presenciales o híbridos fuera de Bahía Blanca, ni nada que requiera inglés.",
+    "not_suitable": "NO entrena modelos ni construye redes neuronales: conecta modelos ya entrenados a producto. Por eso NO sirven los puestos de Machine Learning Engineer, Data Scientist, MLOps, Deep Learning, Computer Vision ni nada que pida entrenar, hacer fine-tuning o armar arquitecturas de modelos. Tampoco: puestos junior, roles no técnicos, presenciales o híbridos fuera de Bahía Blanca, ni nada que requiera inglés. Data Scientist, Computer Vision, MLOps, Architect, Arquitecto, Preventa, Pre-sales, Consultant, Consultor, Product Manager, Copilot Studio, Power Platform, Laravel, Head, Director, Manager",
     "relocation_note": "No se reubica ni viaja. Bahía Blanca o remoto.",
     "search_seniority": "",
     "search_keywords": "",
@@ -93,7 +101,7 @@
     },
     {
       "type": "google_posts",
-      "enabled": true,
+      "enabled": false,
       "provider": "tinyfish",
       "language": "es",
       "roles": [
@@ -170,11 +178,9 @@
       "enabled": true,
       "search_terms": [
         "AI Engineer",
-        "Machine Learning",
         "Python",
         "Backend Python",
-        "LLM",
-        "Data"
+        "LLM"
       ],
       "country_code": "AR",
       "results_wanted": 30,
@@ -200,12 +206,29 @@
       "path": "resume/isaias.md",
       "palabras_clave": [
         "AI Engineer",
-        "AI Solution Engineer",
-        "Generative AI",
-        "Gen AI",
-        "AI First",
-        "AI Platform Engineer",
-        "Python"
+        "Applied AI Engineer",
+        "Forward Deployed Engineer",
+        "Agentic AI Engineer",
+        "LLM Engineer",
+        "Python Developer",
+        "Backend Python",
+        "Full Stack Developer",
+        "Ingeniero de IA",
+        "Ingeniero de Inteligencia Artificial",
+        "Desarrollador IA",
+        "Desarrollador Python",
+        "Desarrollador Full Stack",
+        "Especialista en IA"
+      ],
+      "habilidades": [
+        "LLM",
+        "RAG",
+        "LangChain",
+        "Chroma",
+        "OpenAI",
+        "Whisper",
+        "Tool calling",
+        "Function calling"
       ]
     },
     {
@@ -214,11 +237,16 @@
       "path": "resume/isaias-cv-2.md",
       "palabras_clave": [
         "Full Stack",
-        "Python",
-        "FastAPI",
+        "Full-stack"
+      ],
+      "habilidades": [
         "React",
         "Next.js",
-        "Full-stack"
+        "React Native",
+        "Node.js",
+        "Express",
+        "Redux",
+        "Jest"
       ]
     }
   ]

@@ -30,9 +30,10 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from html import unescape
 
+from vacantia import rotacion
 from vacantia.config import terminos_de_busqueda
 from vacantia.log import get_logger
 from vacantia.models import Job
@@ -78,17 +79,17 @@ class GetOnBoardSource(Source):
     # --- qué buscar -----------------------------------------------------
 
     def terminos(self) -> list[str]:
-        """Los términos, rotados por día como en las otras fuentes.
+        """Los términos, rotados por corrida como en las otras fuentes.
 
         Sin rotación, con `max_queries` chico los últimos términos del perfil no
-        se consultarían nunca.
+        se consultarían nunca. Deja anotado desde dónde sigue la próxima
+        corrida, que el motor guarda al final (ver `rotacion`).
         """
         crudos = terminos_de_busqueda(self.profile, self.config.get("search_terms"))
         terminos = [str(t).strip() for t in crudos if str(t).strip()]
-        if not terminos or self.max_queries <= 0 or self.max_queries >= len(terminos):
-            return terminos
-        offset = date.today().toordinal() % len(terminos)
-        return [terminos[(offset + i) % len(terminos)] for i in range(self.max_queries)]
+        tanda, self.siguiente_en_rotacion = rotacion.elegir(
+            self.profile, self.name, terminos, self.max_queries)
+        return tanda
 
     def is_available(self) -> tuple[bool, str]:
         # No pide credenciales: lo único que puede faltar es qué buscar.
@@ -169,6 +170,7 @@ class GetOnBoardSource(Source):
             source=self.name,
             location=", ".join(paises),
             description=cuerpo[:3000],
+            descripcion_completa=cuerpo,
             posted_at=publicado,
             country=reales[0] if reales else ("Argentina" if self.country_code == "AR" else ""),
             work_mode=modalidad or ("remote" if remoto else ""),

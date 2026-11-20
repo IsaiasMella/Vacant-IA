@@ -34,8 +34,8 @@ tandas de 10. Sin credenciales de TinyFish la fuente se saltea sola.
 import re
 import time
 import unicodedata
-from datetime import date
 
+from vacantia import rotacion
 from vacantia.config import terminos_de_busqueda
 from vacantia.config import resolve_secret
 from vacantia.log import get_logger
@@ -123,17 +123,18 @@ class PortalSource(Source):
     # --- qué buscar -----------------------------------------------------
 
     def terminos(self) -> list[str]:
-        """Los términos de búsqueda, rotados por día como en las otras fuentes.
+        """Los términos de búsqueda, rotados por corrida como en las otras fuentes.
 
         Sin rotación, con `max_queries` chico los últimos términos del perfil no
-        se consultarían nunca.
+        se consultarían nunca. Deja anotado desde dónde sigue la próxima
+        corrida, que el motor guarda al final (ver `rotacion`). La posición es
+        por portal: Indeed y Computrabajo avanzan cada uno a su ritmo.
         """
         crudos = terminos_de_busqueda(self.profile, self.config.get("search_terms"))
         terminos = [str(t).strip() for t in crudos if str(t).strip()]
-        if not terminos or self.max_queries <= 0 or self.max_queries >= len(terminos):
-            return terminos
-        offset = date.today().toordinal() % len(terminos)
-        return [terminos[(offset + i) % len(terminos)] for i in range(self.max_queries)]
+        tanda, self.siguiente_en_rotacion = rotacion.elegir(
+            self.profile, self.name, terminos, self.max_queries)
+        return tanda
 
     def url_de_busqueda(self, termino: str) -> str:
         if self.location and self.location_url:
@@ -223,6 +224,7 @@ class PortalSource(Source):
             if not texto:
                 continue
             job.description = texto[:3000]
+            job.descripcion_completa = texto
             if self.extractor is None:
                 continue
             try:

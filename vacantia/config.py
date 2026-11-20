@@ -154,7 +154,17 @@ def _build_llm_config(llm: dict) -> dict:
 #
 # Una persona puede postularse con más de un perfil profesional: AI Engineer y
 # Full Stack, o dos variantes de QHSE. Por eso el perfil tiene una lista `cvs`,
-# y cada uno trae su nombre, su archivo y sus propias palabras de búsqueda.
+# y cada uno trae su nombre, su archivo, los puestos que se buscan con él
+# (`palabras_clave`) y sus habilidades (`habilidades`).
+#
+# **Puestos y habilidades van separados** desde el 19/11/2026. Antes era una sola
+# lista, y "Python", "React" o "FastAPI" se buscaban en los portales como si
+# fueran puestos: "React" en LinkedIn trae frontend, que después se descarta por
+# título, y cada habilidad ocupaba uno de los 3 lugares por corrida que tiene
+# LinkedIn. Ahora sólo los puestos se buscan; las habilidades afinan ("Que además
+# diga" en la pestaña Jobs de LinkedIn URLs) y le dicen al modelo qué sabe hacer
+# la persona. Los campos conservan su nombre (`keywords` y `palabras_clave` son
+# los puestos) para que los perfiles de las copias de la familia sigan andando.
 #
 # **Un perfil viejo, con sólo `cv_path`, sigue andando igual**: se lo lee como un
 # único CV llamado "principal". Nada se migra en disco; la lista se arma al leer.
@@ -171,7 +181,7 @@ def id_de_cv(nombre: str) -> str:
 
 
 def cvs_del_perfil(profile: dict) -> list[dict]:
-    """Los CV del perfil, sin leer los archivos: [{id, nombre, path, palabras_clave}].
+    """Los CV del perfil, sin leer los archivos: [{id, nombre, path, palabras_clave, habilidades}].
 
     Siempre devuelve al menos uno. Un perfil sin `cvs` (o con la lista vacía o
     rota) se lee como un único CV con el `cv_path` de siempre.
@@ -186,11 +196,13 @@ def cvs_del_perfil(profile: dict) -> list[dict]:
             continue
         vistos.add(cv_id)
         palabras = crudo.get("palabras_clave") or []
+        habilidades = crudo.get("habilidades") or []
         salida.append({
             "id": cv_id,
             "nombre": nombre,
             "path": str(crudo["path"]).strip(),
             "palabras_clave": [str(p).strip() for p in palabras if str(p).strip()],
+            "habilidades": [str(h).strip() for h in habilidades if str(h).strip()],
         })
     if salida:
         return salida
@@ -201,6 +213,7 @@ def cvs_del_perfil(profile: dict) -> list[dict]:
         "nombre": nombre or "Principal",
         "path": profile.get("cv_path") or "resume/YOUR_CV.md",
         "palabras_clave": [],
+        "habilidades": [],
     }]
 
 
@@ -241,8 +254,38 @@ def load_resume(profile: dict) -> str:
     return load_resumes(profile)[0]["texto"]
 
 
+def _sin_repetir(terminos) -> list[str]:
+    """Sin duplicados, respetando el orden.
+
+    No distingue mayúsculas ni guiones: "Full Stack" y "Full-stack" son la misma
+    búsqueda, y en el perfil de Isaías estaban las dos ocupando dos lugares de
+    la rotación.
+    """
+    salida, vistos = [], set()
+    for termino in terminos:
+        limpio = str(termino).strip()
+        clave = re.sub(r"[\s\-_]+", " ", limpio.lower())
+        if limpio and clave not in vistos:
+            vistos.add(clave)
+            salida.append(limpio)
+    return salida
+
+
+def habilidades_del_perfil(profile: dict) -> list[str]:
+    """Lo que la persona sabe hacer: las del perfil y las de cada CV, sin repetir.
+
+    **No se buscan en los portales** (ver la nota de arriba de `id_de_cv`). Las
+    usan el modelo al puntuar, el triaje para ordenar, y el constructor de
+    LinkedIn URLs para proponer "Que además diga".
+    """
+    candidatas = list(profile.get("habilidades") or [])
+    for cv in cvs_del_perfil(profile):
+        candidatas.extend(cv["habilidades"])
+    return _sin_repetir(candidatas)
+
+
 def terminos_de_busqueda(profile: dict, propios=None) -> list[str]:
-    """Qué buscar en los portales: los términos de la fuente, más los de cada CV.
+    """Qué buscar en los portales: los términos de la fuente, más los puestos de cada CV.
 
     `propios` son los `search_terms` (o `roles`) de la fuente. Si no tiene, se
     usan las palabras clave del perfil. **A eso se le suman siempre las
@@ -251,20 +294,15 @@ def terminos_de_busqueda(profile: dict, propios=None) -> list[str]:
     cargar un CV de Full Stack no hacía salir a buscar ni una sola oferta de
     Full Stack.
 
-    Sin duplicados y sin distinguir mayúsculas, respetando el orden: primero lo
-    de la fuente, después lo de cada CV. Las fuentes ya rotan los términos por
-    día con un tope por corrida, así que sumar términos reparte la cobertura
-    entre días y no multiplica los pedidos.
+    Sólo puestos: las habilidades del CV no entran (ver `habilidades_del_perfil`).
+
+    Sin duplicados (ver `_sin_repetir`), respetando el orden: primero lo de la
+    fuente, después lo de cada CV. Las fuentes rotan los términos por corrida
+    con un tope (ver `rotacion`), así que sumar términos reparte la cobertura
+    entre corridas y no multiplica los pedidos.
     """
     base = propios if propios else (profile.get("keywords") or [])
     candidatos = list(base)
     for cv in cvs_del_perfil(profile):
         candidatos.extend(cv["palabras_clave"])
-
-    salida, vistos = [], set()
-    for termino in candidatos:
-        limpio = str(termino).strip()
-        if limpio and limpio.lower() not in vistos:
-            vistos.add(limpio.lower())
-            salida.append(limpio)
-    return salida
+    return _sin_repetir(candidatos)

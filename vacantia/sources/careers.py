@@ -338,6 +338,7 @@ class CareersPagesSource(Source):
                 if not (r and r.text):
                     continue
                 job.description = r.text[:3000]
+                job.descripcion_completa = r.text
                 if r.title and not GENERIC_TITLE_RE.search(r.title):
                     job.title = r.title
                 logger.debug(f"    '{job.title}' — {len(r.text)} chars")
