@@ -332,7 +332,7 @@ def tareas(monkeypatch):
         return SimpleNamespace(returncode=respuesta, stdout="",
                                stderr="ERROR: Acceso denegado.")
 
-    monkeypatch.setattr(data.subprocess, "run", falso)
+    monkeypatch.setattr(data.configuracion.subprocess, "run", falso)
     return SimpleNamespace(pedidos=pedidos, respuestas=respuestas)
 
 
